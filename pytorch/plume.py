@@ -434,6 +434,7 @@ try:
 finally:
     # Properly deleting model_saved.py, even when ctrl+C
     print()
+    #Printing 13/03/19
     print('Deleting' + temp_model)
     glob.os.remove(temp_model)
 
