@@ -97,8 +97,16 @@ temp_model = glob.os.path.join('lib', path_list[-1] + '_saved_simulate.py')
 copyfile(saved_model_name, temp_model)
 
 assert glob.os.path.isfile(temp_model), temp_model  + ' does not exits!'
+#importlib.util.spec_from_file_location(name, location, *, loader=None, submodule_search_locations=None)
+#A factory function for creating a ModuleSpec instance based on the path to a file. Missing information will be filled in on the spec by making use of loader APIs and by the implication that the module will be file-based.
 spec = importlib.util.spec_from_file_location('model_saved', temp_model)
+#importlib.util.module_from_spec(spec)
+#Create a new module based on spec and spec.loader.create_module.
+#If spec.loader.create_module does not return None, then any pre-existing attributes will not be reset. Also, no AttributeError will be raised if triggered while accessing spec or setting an attribute on the module.
+#This function is preferred over using types.ModuleType to create a new module as spec is used to set as many import-controlled attributes on the module as possible.
 model_saved = importlib.util.module_from_spec(spec)
+#exec_module(module)
+#An abstract method that executes the module in its own namespace when a module is imported or reloaded. The module should already be initialized when exec_module() is called. When this method exists, create_module() must be defined.
 spec.loader.exec_module(model_saved)
 
 try:
@@ -184,6 +192,7 @@ try:
                 yaml.dump(simConf, outfile)
 
         # Print options for debug
+        # Number of array items in summary at beginning and end of each dimension (default = 3).
         torch.set_printoptions(precision=1, edgeitems = 5)
 
         # Parameters for matplotlib draw

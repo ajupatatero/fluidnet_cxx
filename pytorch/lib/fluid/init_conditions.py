@@ -34,17 +34,21 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
         assert zdim == 1, 'For 2D, zdim must be 1'
     centerX = xdim // 2
     centerZ = max( zdim // 2, 1.0)
+    #Remember that floor (5.6 = 5, -7.1 = -7)
     plumeRad = math.floor(xdim*rad)
 
     y = 1
     if (not is3D):
+        #vec = (0,1)
         vec = torch.arange(0,2, device=cuda)
     else:
         vec = torch.arange(0,3, device=cuda)
         vec[2] = 0
 
+    # vec = vec * u_scale (vinj)
     vec.mul_(u_scale)
 
+    # Equal to = vector size H, then reshaped to a matrix of size (H,1) and expanded
     index_x = torch.arange(0, xdim, device=cuda).view(xdim).expand_as(density[0][0])
     index_y = torch.arange(0, ydim, device=cuda).view(ydim, 1).expand_as(density[0][0])
     if (is3D):
@@ -75,7 +79,7 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     maskOutside = (maskInside == 0)
     UBC[:,:,:,0:4].masked_fill_(maskOutside, 0)
     UBCInvMask[:,:,:,0:4].masked_fill_(maskOutside, 0)
-
+    
     # Insert the new tensors in the batch_dict.
     batch_dict['UBC'] = UBC
     batch_dict['UBCInvMask'] = UBCInvMask

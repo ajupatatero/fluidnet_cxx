@@ -7,7 +7,7 @@ from .load_manta_data import loadMantaFile
 class FluidNetDataset(Dataset):
     """Fluid Net dataset."""
 
-    def __init__(self, conf, prefix, save_dt, preprocess=False, resume=False, pr_n_threads=0):
+    def __init__(self, conf, prefix, save_dt, preprocess=False, resume=False, pr_n_threads=8):
 
         self.conf = conf.copy()
         self.mconf = self.conf['modelParam']

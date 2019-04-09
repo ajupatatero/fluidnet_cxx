@@ -67,7 +67,7 @@ print('Parsing and checking arguments')
 
 arguments = parser.parse_args()
 with open(arguments.trainingConf, 'r') as f:
-    conf = yaml.load(f)
+    conf = yaml.load(f, Loader=yaml.FullLoader)
 
 conf['dataDir'] = arguments.dataDir or conf['dataDir']
 conf['modelDir'] = arguments.modelDir or conf['modelDir']

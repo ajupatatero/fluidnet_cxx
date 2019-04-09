@@ -26,13 +26,14 @@ class _HiddenConvBlock(nn.Module):
     def __init__(self, dropout=True):
         super(_HiddenConvBlock, self).__init__()
         layers = [
-            nn.Conv2d(16, 16, kernel_size=3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(16, 16, kernel_size=3, padding = 0),
             nn.ReLU(inplace=True),
-            nn.Conv2d(16, 16, kernel_size=3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(16, 16, kernel_size=3, padding = 0),
             nn.ReLU(),
         ]
-        if dropout:
-            layers.append(nn.Dropout())
+
         self.block = nn.Sequential(*layers)
 
     def forward(self, x):
