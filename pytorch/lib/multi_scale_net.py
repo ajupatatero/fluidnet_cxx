@@ -25,18 +25,21 @@ class _ConvBlock1(nn.Module):
     Optional dropout before final Conv2d layer
     ReLU after first two Conv2d layers, not after last two - predictions can be +ve or -ve
     """
-    def __init__(self, in_channels, mid1_channels, mid2_channels, out_channels,dropout=True):
+    def __init__(self, in_channels, mid1_channels, mid2_channels, out_channels,dropout=False):
         super(_ConvBlock1, self).__init__()
         layers = [
-            nn.Conv2d(in_channels, mid1_channels, kernel_size=3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(in_channels, mid1_channels, kernel_size=3),
             nn.ReLU(inplace=True),
-            nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3),
             nn.ReLU(),
-            nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3),
         ]
-        if dropout:
-            layers.append(nn.Dropout())
-        layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 3, padding = 1))
+        
+        layers.append(nn.ReplicationPad2d(1))
+        layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 3))
         self.encode = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -49,22 +52,26 @@ class _ConvBlock2(nn.Module):
     Optional dropout before final Conv2d layer
     ReLU after first four Conv2d layers, not after last two - predictions can be +ve or -ve
     """
-    def __init__(self, in_channels, mid1_channels, mid2_channels,mid3_channels, out_channels,dropout=True):
+    def __init__(self, in_channels, mid1_channels, mid2_channels,mid3_channels, out_channels,dropout=False):
         super(_ConvBlock2, self).__init__()
         layers = [
-            nn.Conv2d(in_channels, mid1_channels, kernel_size=5, padding = 2),
+            nn.ReplicationPad2d(2),
+            nn.Conv2d(in_channels, mid1_channels, kernel_size=5),
             nn.ReLU(inplace=True),
-            nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3),
             nn.ReLU(),
-            nn.Conv2d(mid2_channels,mid3_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid2_channels,mid3_channels,kernel_size = 3),
             nn.ReLU(),
-            nn.Conv2d(mid3_channels,mid2_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid3_channels,mid2_channels,kernel_size = 3),
             nn.ReLU(),
-            nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3),
         ]
-        if dropout:
-            layers.append(nn.Dropout())
-        layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 3, padding = 1))
+        layers.append(nn.ReplicationPad2d(1))
+        layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 3))
         self.encode = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -77,22 +84,26 @@ class _ConvBlock3(nn.Module):
     Optional dropout before final Conv2d layer
     ReLU after first four Conv2d layers, not after last two - predictions can be +ve or -ve
     """
-    def __init__(self, in_channels, mid1_channels, mid2_channels,mid3_channels, out_channels,dropout=True):
+    def __init__(self, in_channels, mid1_channels, mid2_channels,mid3_channels, out_channels,dropout=False):
         super(_ConvBlock3, self).__init__()
         layers = [
-            nn.Conv2d(in_channels, mid1_channels, kernel_size=5, padding = 2),
+            nn.ReplicationPad2d(2),
+            nn.Conv2d(in_channels, mid1_channels, kernel_size=5),
             nn.ReLU(inplace=True),
-            nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3),
             nn.ReLU(),
-            nn.Conv2d(mid2_channels,mid3_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid2_channels,mid3_channels,kernel_size = 3),
             nn.ReLU(),
-            nn.Conv2d(mid3_channels,mid2_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid3_channels,mid2_channels,kernel_size = 3),
             nn.ReLU(),
-            nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3, padding = 1),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3),
         ]
-        if dropout:
-            layers.append(nn.Dropout())
-        layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 5, padding = 2))
+        layers.append(nn.ReplicationPad2d(2))
+        layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 5))
         self.encode = nn.Sequential(*layers)
 
     def forward(self, x):

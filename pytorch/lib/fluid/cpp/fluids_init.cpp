@@ -880,7 +880,7 @@ std::vector<T> solveLinearSystemJacobi
     }
     maskBorder.unsqueeze_(1);
 
-    // Zero pressure on the border.
+   typedef at::Tensor T; // Zero pressure on the border.
     cur_p->masked_fill_(maskBorder, 0);
     mCont.masked_fill_(maskBorder, 0);
 
@@ -1003,12 +1003,399 @@ std::vector<T> solveLinearSystemJacobi
   return {p, residual};
 }
 
+typedef at::Tensor T; 
+    
+// We declare the Preconditioner module
 
+T Precon_Z
+(
+   T& flags, T& div, T Precon,
+   T A_next_i, T A_next_j
+) {
+        
+    int bsz = flags.size(0);
+    int d = flags.size(2);
+    int h = flags.size(3);
+    int w = flags.size(4);
+    bool is3D = (d > 1);
+        
+    auto options = src.options();
+        
+    T Temporal = zeros_like(div); // Floating zero
+    T Q = zeros_like(div); // Floating zero
+    T Z = zeros_like(div); // Floating zero
+    
+    // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+    
+    for( int i = 0; i < w; i = i + 1 ) {
+        for( int j = 0; j < h; j = j + 1 ) {
+            //If the corresponding position is fluid: Algo from Bridson pg 65
+            if (fluid[:,:,i,j,k] > 0) {
+                Temporal[:,:,i,j,k] = residual[:,:,i,j,k] - (A_next_i[:,:,i-1,j,k]*Precon[:,:,i-1,j,k]*Q[:,:,i-1,j,k])
+                - (A_next_j[:,:,i,j-1,k]*Precon[:,:,i,j-1,k]*Q[:,:,i,j-1,k]);
+            }
+            
+            // We have just solved the equation Lq =r
+            Q[:,:,i,j,k] = Temporal[:,:,i,j,k]*Precon[:,:,i,j,k];
+            
+        }
+    }
+    
+    // Now we attack the equation L^T z = q
+    // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+    
+    for( int i = w; i > 0; i = i - 1 ) {
+        for( int j = h; j > 0; j = j - 1 ) {
+            //If the corresponding position is fluid: Algo from Bridson pg 65
+            if (fluid[:,:,i,j,k] > 0) {
+                Temporal[:,:,i,j,k] = Q[:,:,i,j,k] - (A_next_i[:,:,i,j,k]*Precon[:,:,i,j,k]*Z[:,:,i+1,j,k])
+                - (A_next_j[:,:,i,j,k]*Precon[:,:,i,j,k]*Z[:,:,i,j-1,k]);
+            }
+            
+            // We have just solved the equation Lq =r
+            Z[:,:,i,j,k] = Temporal[:,:,i,j,k]*Precon[:,:,i,j,k];
+            
+        }
+    }
+    
+    return Z;
+}
+    
+
+// We now declare the PCG solving
+    
+std::vector<T> solveLinearSystemPCG
+(
+     T flags,
+     T div,
+     const bool is3D,
+     const float p_tol = 1e-5,
+     const float dt = 1e-1,
+     const int max_iter = 1000,
+     const bool verbose = false
+) {
+        auto options = div.options();
+        
+        // Check arguments.
+        T p = zeros_like(flags);
+        
+        // Create the A_diagonal and A_next_i,  A_next_j, A_next_k
+        
+        T A_diag = zeros_like(flags);
+        
+        T A_left = zeros_like(flags);
+        T A_bot = zeros_like(flags);
+        T A_back = zeros_like(flags);
+        T A_fluid = zeros_like(flags);
+        
+        T A_next_i = zeros_like(flags);
+        T A_next_j = zeros_like(flags);
+        T A_next_k = zeros_like(flags);
+        
+        // Constant initializing
+        
+        const int32_t bnd =1;
+        
+        
+        AT_ASSERTM(p.dim() == 5 && flags.dim() == 5 && div.dim() == 5,
+                   "Dimension mismatch");
+        AT_ASSERTM(flags.size(1) == 1, "flags is not scalar");
+        int bsz = flags.size(0);
+        int d = flags.size(2);
+        int h = flags.size(3);
+        int w = flags.size(4);
+        int numel = d * h * w;
+        AT_ASSERTM(p.is_same_size(flags), "size mismatch");
+        AT_ASSERTM(div.is_same_size(flags), "size mismatch");
+        if (!is3D) {
+            AT_ASSERTM(d == 1, "d > 1 for a 2D domain");
+        }
+        
+        AT_ASSERTM(p.is_contiguous() && flags.is_contiguous() &&
+                   div.is_contiguous(), "Input is not contiguous");
+        
+        //T p_prev = at::zeros({bsz, 1, d, h, w}, options).toType(p.scalar_type());
+        //T p_delta = at::zeros({bsz, 1, d, h, w}, options).toType(p.scalar_type());
+        //T p_delta_norm = at::zeros({bsz}, options).toType(p.scalar_type());
+        
+        
+        // Kernel: Jacobi Iteration
+        T mCont = at::ones({bsz, 1, d, h, w}, options).toType(at::kByte); // Continue mask
+        
+        T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz, d, h, w}).toType(at::kLong);
+        T idx_y = at::arange(0, h, options).view({1,h,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
+        T idx_z = zeros_like(idx_x);
+        if (is3D) {
+            idx_z = at::arange(0, d, options).view({1,d,1,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
+        }
+        
+        T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(at::kLong);
+        idx_b = idx_b.expand({bsz,d,h,w});
+        
+        T maskBorder = (idx_x < bnd).__or__
+        (idx_x > w - 1 - bnd).__or__
+        (idx_y < bnd).__or__
+        (idx_y > h - 1 - bnd);
+        if (is3D) {
+            maskBorder = maskBorder.__or__(idx_z < bnd).__or__
+            (idx_z > d - 1 - bnd);
+        }
+        maskBorder.unsqueeze_(1);
+        
+        // Zero pressure on the border.
+        cur_p->masked_fill_(maskBorder, 0);
+        mCont.masked_fill_(maskBorder, 0);
+        
+        T zero_f = at::zeros_like(p); // Floating zero
+        T zero_l = at::zeros_like(p).toType(at::kLong); // Long zero (for index)
+        T zeroBy = at::zeros_like(p).toType(at::kByte); // Long zero (for index)
+        // Otherwise, we are in a fluid or empty cell.
+        // First, we get all the neighbors.
+        
+        //T pC = *cur_p_prev;
+        
+        T i_l = zero_l.where( (idx_x <=0), idx_x - 1);
+        //T p1 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, idx_y, i_l})
+        //    .unsqueeze(1));
+        
+        T i_r = zero_l.where( (idx_x > w - 1 - bnd), idx_x + 1);
+        //T p2 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, idx_y, i_r})
+        //    .unsqueeze(1));
+        
+        T j_l = zero_l.where( (idx_y <= 0), idx_y - 1);
+        //T p3 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, j_l, idx_x})
+        //    .unsqueeze(1));
+        T j_r = zero_l.where( (idx_y > h - 1 - bnd), idx_y + 1);
+        //T p4 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, j_r, idx_x})
+        //    .unsqueeze(1));
+        
+        T k_l = zero_l.where( (idx_z <= 0), idx_z - 1);
+        //T p5 = is3D ? zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, k_l, idx_y, idx_x})
+        //    .unsqueeze(1)) : zero_f;
+        T k_r = zero_l.where( (idx_z > d - 1 - bnd), idx_z + 1);
+        //T p6 = is3D ? zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, k_r, idx_y, idx_x})
+        //    .unsqueeze(1)) : zero_f;
+        
+        T neighborLeftObs = mCont.__and__(zeroBy.
+                                          where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_l}).eq(TypeObstacle)).unsqueeze(1));
+        T neighborRightObs = mCont.__and__(zeroBy.
+                                           where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeObstacle)).unsqueeze(1));
+        T neighborBotObs = mCont.__and__(zeroBy.
+                                         where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_l, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        T neighborUpObs = mCont.__and__(zeroBy.
+                                        where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        T neighborBackObs = zeroBy;
+        T neighborFrontObs = zeroBy;
+        
+        if (is3D) {
+            T neighborBackObs = mCont.__and__(zeroBy.
+                                              where(mCont.ne(1), flags.index({idx_b, zero_l, k_l, idx_y, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+            T neighborFrontObs = mCont.__and__(zeroBy.
+                                               where(mCont.ne(1), flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        }
+        
+        // Depending on the dimension our fluid will start on 2 or 3 (Laplacian scheme)
+        const float dnom = is3D ? 3 : 2;
+        
+        //The basic flag where 1 = fluid (objects and borders = 0)
+        T fluid_flag = mCont.__and__(zeroBy.
+                                     where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        
+        // 1 where fluid and no borcer in the left/bottom/back
+        A_left.masked_fill_(neighborLeftObs, 1);
+        A_bot.masked_fill_(neighborBotObs, 1);
+        A_back.masked_fill_(neighborBackObs, 1);
+        A_fluid.masked_fill_(fluid_flag, dnom);
+        
+        //Watch the A_diagonal structure
+        A_diag = A_fluid+A_left+A_bot+A_back;
+        
+        //Similar procedure for the A_next_i/j/k
+        //We will have -1 when the cell is fluid and the cellule to the right/top/front is fluid
+        A_next_i.masked_fill_(neighborRightObs,-1);
+        A_next_j.masked_fill_(neighborUpObs,-1);
+        A_next_k.masked_fill_(neighborFrontObs,-1);
+        
+        if (max_iter < 1) {
+            AT_ERROR("At least 1 iteration is needed (maxIter < 1)");
+        }
+        
+        // Initialize the pressure to zero.
+        p.zero_();
+        
+        
+        // Start with the output of the next iteration going to pressure.
+        //T* cur_p = &p;
+        //T* cur_p_prev = &p_prev;
+        //RealGrid* cur_pressure_prev = &pressure_prev;
+        
+        
+        // WE HAVE TO TRY TO IMPLEMENT DOUBLE PRECISSION!!!!!!!
+        
+        T residual;
+        //Set residual to its initial value: We supose that AX = b where AX = Lapl P et b = div U /dt
+        //Watch out for dt ==> Input !!!!!!
+        residual = div/dt;
+        //This residual is not GOOD DEBUG IN A NEAR FUTURRRRRRRRRRR
+        if (max(residual) < p_tol) {
+            if (verbose) {
+                std::cout << "The residual is already small enough, P = 0" << std::endl;
+            }
+            break;
+        }
+        
+        // PRECONDTIONER ALGORITHM
+        // !!!!!!!!!!!!!!!!!!
+        
+        // APPLYING THE PRECONDITIONER
+        // z = M r
+        //  for i j k
+        //    if fluid:
+        //      t = r - Aplus_i*precon(i-1) *q(i-1)
+        //            - Aplus_j*precon(j-1)* q(j-1)
+        //    q = t * precon
+        //  for i j k
+        //    if fluid:
+        //      t = q - Aplus_i*precon(i)*z(i+1)
+        //            - Aplus_j*precon(j)*z(j+1)
+        //    z = t * precon
+        
+        // T z = dot product M * residual
+        // We will first calculate the preconditioner
+        
+        // We declare the tuning constant (tau) and the safety constant (sigma)
+        // E_diag and Precon will have the size i,j, k (same as flags)
+        const float tau = 0.97;
+        const float Safety = 0.25;
+        
+        T E_diag = zeros_like(div); // Floating zero
+        T Precon = zeros_like(div); // Floating zero
+        
+        // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+        
+        for( int i = 0; i < w; i = i + 1 ) {
+            for( int j = 0; j < h; j = j + 1 ) {
+                //If the corresponding position is fluid: Algo from Bridson pg 65
+                if (fluid[:,:,i,j,k] > 0) {
+                    E_diag[i,j,k] = A_diag[:,:,i,j,k] - (A_next_i[:,:,i-1,j,k]*Precon[:,:,i-1,j,k])**2 - (A_next_j[:,:,i,j-1,k]*Precon[:,:,i,j-1,k])**2
+                    - tau * (A_next_i[:,:,i-1,j,k]*(A_next_j[:,:,i-1,j,k]*Precon[:,:,i-1,j,k]**2)+ A_next_j[:,:,i,j-1,k]*A_next_i[:,:,i,j-1,k]*Precon[:,:,i,j-1,k]**2);
+                }
+                
+                // Chek if the value es too low (sec factor * diag). If so, E_Diag = A_diag
+                if ( E_diag[:,:,i,j,k] < sigma * A_diag[:,:,i,j,k]) {
+                    E_diag[:,:,i,j,k] = A_diag[:,:,i,j,k];
+                }
+                
+                //Finally, the precondtionner will be equal to 1/sqrt(E)
+                Precon[:,:,i,j,k]= 1 / (E_diag[:,:,i,j,k]**0.5);
+            }
+        }
+        
+        // Once we have calculated the preconditioner, we should now solve z = Mr
+        z = Precon_Z(flags, div, Precon, A_next_i,A_next_j);
+        T Sigma = r1 = std::inner_product(z.begin(), z.end(), residual.begin(), 0);
+        T s = residual;
+        const float alpha = 0;
+        
+        //Declare the Neighbours for the operation W = A * s
+        
+        T S_minus_i = zeros_like(div);
+        T S_plus_i = zeros_like(div);
+        T S_minus_j = zeros_like(div);
+        T S_plus_j = zeros_like(div);
+        
+        //The shifted values
+        for( int i = 0; i < w; i = i + 1 ) {
+            S_minus_i[:,:,i,:,:] = s[:,:,i-1,:,:];
+            S_plus_i[:,:,i,:,:] = s[:,:,i+1,:,:]
+            }
+        for( int j = 0; j < h; j = j + 1 ) {
+            S_minus_j[:,:,:,j,:] = s[:,:,:,j-1,:];
+            S_plus_j[:,:,:,j,:] = s[:,:,:,j+1,:]
+        }
+        
+        
+        int64_t iter = 0;
+        while (true) {
+            
+            //Algorithm !!!!!!!!!!!!!!!!!!!
+            W = A_diag*s + A_plus_i*S_minus_i + A_plus_i*S_plus_i + A_plus_j*S_minus_j + A_plus_j*S_plus_j //!!!!!Implement
+            //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            alpha = sigma/(std::inner_product(Z.begin(), Z.end(), s.begin(), 0));
+            p = p + alpha*s
+            residual = residual - alpha*W
+            
+            if (verbose) {
+                std::cout << "Jacobi iteration " << (iter + 1) << ": residual "
+                << residual << std::endl;
+            }
+            
+            if (max(residual) < p_tol) {
+                if (verbose) {
+                    std::cout << "The residual is already small enough, P = 0" << std::endl;
+                }
+                break;
+            }
+            
+            
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            //Algorithm !!!!!!!!!!!!!!!!!!!
+            //z = dot product M * residual //!!!!!Implement
+            // Once we have calculated the preconditioner, we should now solve z = Mr
+            
+            z = Precon_Z(flags, div, Precon, A_next_i,A_next_j)
+            sigma_new = std::inner_product(z.begin(), z.end(), residual.begin(), 0)
+            beta = sigma_new / sigma
+            
+            s = z + beta*s
+            sigma = sigma_new
+            
+            iter++;
+            if (iter >= max_iter) {
+                if (verbose) {
+                    std::cout << "Jacobi max iteration count (" << max_iter
+                    << ") reached (terminating)" << std::endl;
+                }
+                break;
+            }
+        } // end while
+        return {p, residual};
+}
+    
+    
+    
+    
+    
+    
+template<class InputIt1, class InputIt2, class T>
+T inner_product(InputIt1 first1, InputIt1 last1,
+                    InputIt2 first2, T init)
+{
+        while (first1 != last1) {
+            init = std::move(init) + *first1 * *first2; // std::move since C++20
+            ++first1;
+            ++first2;
+        }
+        return init;
+}
+    
+    
+    
+    
+    
+    
 } // namespace fluid
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("advect_scalar", &(fluid::advectScalar), "Advect Scalar");
     m.def("advect_vel", &(fluid::advectVel), "Advect Velocity");
     m.def("solve_linear_system", &(fluid::solveLinearSystemJacobi), "Solve Linear System using Jacobi's method");
+    m.def("solve_linear_system_PCG", &(fluid::solveLinearSystemPCG), "Solve Linear System using PCG method");
 
 }

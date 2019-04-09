@@ -34,14 +34,14 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
             Keys must be 'U', 'flags', 'p', 'density'.
             Simulations are done INPLACE.
         net (nn.Module): convNet model.
-        sim_method (string): Options are 'convnet' and 'jacobi'
+        sim_method (string): Options are 'convnet', 'PCG' and 'jacobi'
         output_div (bool, optional): returns just before solving for pressure.
             i.e. leave the state as UDiv and pDiv (before substracting divergence)
 
     """
     cuda = torch.device('cuda')
-    assert sim_method == 'convnet' or sim_method == 'jacobi', 'Simulation method \
-                not supported. Choose either convnet or jacobi.'
+    assert sim_method == 'convnet' or sim_method == 'jacobi' or sim_method == 'PCG', 'Simulation method \
+                not supported. Choose either convnet, PCG or jacobi.'
 
     dt = float(mconf['dt'])
     maccormackStrength = mconf['maccormackStrength']
@@ -149,6 +149,18 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
         maxIter = mconf['jacobiIter']
 
         p, residual = fluid.solveLinearSystemJacobi( \
+                flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
+                max_iter=maxIter)
+        fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+
+    elif (sim_method == 'PCG'):
+        div = fluid.velocityDivergence(U, flags)
+
+        is3D = (U.size(2) > 1)
+        pTol = mconf['pTol']
+        maxIter = mconf['jacobiIter']
+
+        p, residual = fluid.solveLinearSystemPCG( \
                 flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
                 max_iter=maxIter)
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)

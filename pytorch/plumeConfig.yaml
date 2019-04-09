@@ -13,16 +13,16 @@ resY: 128
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
-realTimePlot: true
+realTimePlot: false
 # saveVTK : set to true to save results as structured VTK files
 # use Paraview to load those files.
-saveVTK: false
+saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/output/folder"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_ja"
 # simMethod: choose convnet or jacobi
 simMethod: "convnet"
 # modelDir : location of trained model
-modelDir: "/path/to/folder/fluidnet_cxx/trained_models/ScaleNet_ShortTerm_LongTermLoss"
+modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/trained_models/ScaleNet_ShortTerm_LongTermLoss"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
