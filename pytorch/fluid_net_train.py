@@ -357,7 +357,7 @@ try:
                     for i in range(0, num_future_steps):
                         output_div = (i == num_future_steps)
                         lib.simulate(mconf, batch_dict, net, \
-                                'convnet', output_div=output_div)
+                                'convnet', epoch, output_div=output_div)
 
                 data_lt = torch.zeros_like(data)
                 data_lt[:,0] = batch_dict['p'].squeeze(1)
@@ -544,15 +544,18 @@ try:
         # Delete plot file if starting from scratch
         if (glob.os.path.isfile(file_train + '.npy') and glob.os.path.isfile(file_val + '.npy')):
             print('Are you sure you want to delete existing files and start training from scratch. [y/n]')
-            choice = input().lower()
-            if choice in yes:
-                glob.os.remove(file_train + '.npy')
-                glob.os.remove(file_val + '.npy')
-            elif choice in no:
-                print('Exiting program')
-                sys.exit()
-            else:
-                sys.stdout.write("Please respond with 'yes' or 'no'")
+            #Ekhi Debug 
+            glob.os.remove(file_train + '.npy')
+            glob.os.remove(file_val + '.npy')              
+            #choice = input().lower()
+            #if choice in yes:
+            #    glob.os.remove(file_train + '.npy')
+            #    glob.os.remove(file_val + '.npy')
+            #elif choice in no:
+            #    print('Exiting program')
+            #    sys.exit()
+            #else:
+            #    sys.stdout.write("Please respond with 'yes' or 'no'")
 
     # Save config dicts
     torch.save(conf, file_conf)

@@ -60,9 +60,9 @@ arguments = parser.parse_args()
 
 # Loading a YAML object returns a dict
 with open(arguments.simConf, 'r') as f:
-    simConf = yaml.load(f)
+    simConf = yaml.load(f, Loader=yaml.FullLoader)
 with open(arguments.trainingConf, 'r') as f:
-    conf = yaml.load(f)
+    conf = yaml.load(f, Loader=yaml.FullLoader)
 
 if not arguments.restartSim:
     restart_sim = simConf['restartSim']
@@ -79,7 +79,7 @@ if restart_sim:
     # Check if configPlume.yaml exists in folder
     assert glob.os.path.isfile(restart_config_file), 'YAML config file does not exists for restarting.'
     with open(restart_config_file) as f:
-        simConfig = yaml.load(f)
+        simConfig = yaml.load(f, Loader=yaml.FullLoader)
 
 simConf['modelDir'] = arguments.modelDir or simConf['modelDir']
 assert (glob.os.path.exists(simConf['modelDir'])), 'Directory ' + str(simConf['modelDir']) + ' does not exists'
@@ -154,6 +154,9 @@ try:
         batch_dict['U'] = U
         batch_dict['flags'] = flags
         batch_dict['density'] = density
+        #We create a temporary flags for the inflow, in order to avoid affecting the advection
+        flags_i = flags.clone()
+        batch_dict['flags_inflow'] = flags_i
 
         real_time = simConf['realTimePlot']
         save_vtk = simConf['saveVTK']
@@ -219,6 +222,9 @@ try:
         u1 = (torch.zeros_like(torch.squeeze(tensor_vel[:,0]))).cpu().data.numpy()
         v1 = (torch.zeros_like(torch.squeeze(tensor_vel[:,0]))).cpu().data.numpy()
 
+        #Debug
+        #print("FLAGS", flags[0,0,0,0:5,40:80])
+
         # Initialize figure
         if real_time:
             fig = plt.figure(figsize=(20,20))
@@ -235,6 +241,8 @@ try:
             cax_p = make_axes_locatable(ax_p).append_axes("right", size="5%", pad="2%")
             ax_div = fig.add_subplot(gs[1,1], frameon=False, aspect=1)
             cax_div = make_axes_locatable(ax_div).append_axes("right", size="5%", pad="2%")
+            ax_cut = fig.add_subplot(gs[1,2],frameon=False, aspect="auto")
+            cax_cut = make_axes_locatable(ax_cut).append_axes("right", size="5%", pad="2%")
             qx = ax_rho.quiver(X[:maxX_win:skip], Y[:maxY_win:skip],
                 u1[minY:maxY:skip,minX:maxX:skip],
                 v1[minY:maxY:skip,minX:maxX:skip],
@@ -245,11 +253,11 @@ try:
 
         # Main loop
         while (it < max_iter):
-            #if it < 50:
-            #    method = 'jacobi'
-            #else:
-            method = mconf['simMethod']
-            lib.simulate(mconf, batch_dict, net, method)
+            if it < 20:
+                method = 'jacobi'
+            else:
+                method = mconf['simMethod']
+            lib.simulate(mconf, batch_dict, net, method, it)
             if (it% outIter == 0):
                 print("It = " + str(it))
                 tensor_div = fluid.velocityDivergence(batch_dict['U'].clone(),
@@ -284,6 +292,7 @@ try:
                     cax_vely.clear()
                     cax_p.clear()
                     cax_div.clear()
+                    cax_cut.clear()
                     fig.suptitle("it = " + str(it), fontsize=16)
                     im0 = ax_rho.imshow(rho[minY:maxY,minX:maxX],
                         cmap=my_map,
@@ -320,6 +329,21 @@ try:
                     fig.colorbar(im4, cax=cax_div, format='%.0e')
 
                     fig.canvas.draw()
+                    filename = folder + '/output_{0:05}.png'.format(it)
+                    fig.savefig(filename)
+
+                    #Save Cut, Pressure and Velocity Field for posterior ploting 
+                    filename2 = folder + '/Ux_NN_output_{0:05}'.format(it)
+                    np.save(filename2,img_velx[minY:maxY,minX:maxX])
+                    filename3 = folder + '/P_NN_output_{0:05}'.format(it)
+                    np.save(filename3,p[minY:maxY,minX:maxX])
+                    filename4 = folder + '/Uy_NN_output_{0:05}'.format(it)
+                    np.save(filename4,img_vely[minY:maxY,minX:maxX])
+                    filename5 = folder + '/Div_NN_output_{0:05}'.format(it)
+                    np.save(filename5,div[minY:maxY,minX:maxX])
+          
+                    #fig.colorbar(im4, cax=cax_div, format='%.0e')
+                    #fig.canvas.draw()
                     filename = folder + '/output_{0:05}.png'.format(it)
                     fig.savefig(filename)
 

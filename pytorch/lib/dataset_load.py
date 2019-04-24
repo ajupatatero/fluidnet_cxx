@@ -156,6 +156,10 @@ class FluidNetDataset(Dataset):
     # Actual data loader
     def __getitem__(self, idx):
         cur_scene = idx // self.step_per_scene
+        #cur_scene = 64
+        #print("index", idx)
+        #print("self.step_per_scene",self.step_per_scene)
+        #print("Cur_scene",cur_scene)
         cur_timestep = (idx % (self.step_per_scene)) * self.save_dt
         data_file = glob.os.path.join(self.base_dir, '{0:06d}'.format(cur_scene), \
                                       '{0:06d}_pyTen.pt'.format(cur_timestep))

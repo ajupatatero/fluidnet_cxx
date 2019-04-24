@@ -46,7 +46,7 @@ class FluidNet(nn.Module):
     def __init__(self, mconf, dropout=True):
         super(FluidNet, self).__init__()
 
-
+        
         self.dropout = dropout
         self.mconf = mconf
         self.inDims = mconf['inputDim']
@@ -91,6 +91,7 @@ class FluidNet(nn.Module):
 
         # For now, we work ONLY in 2d
 
+       
         assert self.is3D == False, 'Input can only be 2D'
 
         assert self.mconf['inputChannels']['pDiv'] or \
@@ -208,6 +209,7 @@ class FluidNet(nn.Module):
             # Output pressure (1 chan)
             p = self.convOut(x)
 
+        print("P shape model line 212", p.shape)
 
         # Add back the unary dimension
         if not self.is3D:
@@ -215,6 +217,8 @@ class FluidNet(nn.Module):
 
         # Correct U = UDiv - grad(p)
         # flags is the one with Manta's values, not occupancy in [0,1]
+        
+        print("Why not?, model line 220")  
         fluid.velocityUpdate(pressure=p, U=UDiv, flags=flags)
 
         # We now UNDO the scale factor we applied on the input.
@@ -224,6 +228,8 @@ class FluidNet(nn.Module):
 
         # Set BCs after velocity update.
         UDiv = fluid.setWallBcs(UDiv, flags)
+
+       
         return p, UDiv
 
 
