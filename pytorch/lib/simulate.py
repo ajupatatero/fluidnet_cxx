@@ -13,6 +13,7 @@ def setConstVals(batch_dict, p, U, flags, density):
     #    U.add_(batch_dict['UInlet'])
     #    batch_dict['U'] = U.clone()
 
+
     if ('UBCInvMask' in batch_dict) and ('UBC' in batch_dict):
         # Zero out the U values on the BCs.
         U.mul_(batch_dict['UBCInvMask'])
@@ -25,7 +26,8 @@ def setConstVals(batch_dict, p, U, flags, density):
         density.add_(batch_dict['densityBC'])
         batch_dict['density'] = density.clone()
 
-def simulate(mconf, batch_dict, net, sim_method, output_div=False):
+#def simulate(mconf, batch_dict, net, sim_method, output_div=False):
+def simulate(mconf, batch_dict, net, sim_method, it, output_div=False):
     r"""Top level simulation loop.
 
     Arguments:
@@ -37,8 +39,10 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
         sim_method (string): Options are 'convnet', 'PCG' and 'jacobi'
         output_div (bool, optional): returns just before solving for pressure.
             i.e. leave the state as UDiv and pDiv (before substracting divergence)
+        it: only for dubugging, number of iteration
 
     """
+   
     cuda = torch.device('cuda')
     assert sim_method == 'convnet' or sim_method == 'jacobi' or sim_method == 'PCG', 'Simulation method \
                 not supported. Choose either convnet, PCG or jacobi.'
@@ -56,8 +60,10 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
     # Get p, U, flags and density from batch.
     p = batch_dict['p']
     U = batch_dict['U']
-
     flags = batch_dict['flags']
+   
+    #flags_i = batch_dict['flags_inflow']  
+
     stick = False
     if 'flags_stick' in batch_dict:
         stick = True
@@ -91,6 +97,12 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
         # velocity field U.
         U = fluid.advectVelocity(dt=dt, orig=orig, U=U, flags=flags, method="maccormackFluidNet", \
             boundary_width=1, maccormack_strength=maccormackStrength)
+
+
+    #DEBUG EKHI,No fluid injection after it 500 
+    #if (it<500):
+        # Set the constant domain values.
+        #setConstVals(batch_dict, p, U, flags, density)
 
     # Set the manual BCs.
     setConstVals(batch_dict, p, U, flags, density)
@@ -129,21 +141,34 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
     elif stick:
         fluid.setWallBcsStick(U, flags, flags_stick)
 
-    # Set the constant domain values.
+    #DEBUG EKHI,No fluid injection after it 500 
+    #if (it<500):
+        # Set the constant domain values.
+        #setConstVals(batch_dict, p, U, flags, density)
+    
     setConstVals(batch_dict, p, U, flags, density)
-
 
     if (sim_method == 'convnet'):
         # fprop the model to perform the pressure projection and velocity calculation.
         # Set wall BCs is performed inside the model, before and after the projection.
         # No need to call it again.
         net.eval()
+        flags[0,0,0,1:4,46:82].add_(7)
+        #flags[0,0,0,3,46:82].add_(7)
+        #flags[0,0,0,1:3,46].add_(7)
+        #flags[0,0,0,1:3,81].add_(7)
+        #print("flags After Adding 7", flags[0,0,0,0:5,30:64])
+
         data = torch.cat((p, U, flags, density), 1)
         p, U = net(data)
+        flags[0,0,0,1:4,46:82].add_(-7)
+        #flags[0,0,0,3,46:82].add_(-7)
+        #flags[0,0,0,1:3,46].add_(-7)
+        #flags[0,0,0,1:3,81].add_(-7)
+        #print("flags After correction", flags[0,0,0,0:5,30:64])
 
     elif (sim_method == 'jacobi'):
         div = fluid.velocityDivergence(U, flags)
-
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
@@ -155,7 +180,6 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
 
     elif (sim_method == 'PCG'):
         div = fluid.velocityDivergence(U, flags)
-
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
@@ -177,6 +201,11 @@ def simulate(mconf, batch_dict, net, sim_method, output_div=False):
     elif stick:
         fluid.setWallBcsStick(U, flags, flags_stick)
 
+
+    #DEBUG EKHI,No fluid injection after it 500 
+    #if (it<500):
+        # Set the constant domain values.
+        #setConstVals(batch_dict, p, U, flags, density)
     setConstVals(batch_dict, p, U, flags, density)
     batch_dict['U'] = U
     batch_dict['density'] = density

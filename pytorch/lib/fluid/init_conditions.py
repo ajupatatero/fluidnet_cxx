@@ -11,9 +11,14 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
         rad (float): radius of inlet circle (centered around midpoint of wall)
     """
 
+    #Jet length
+    #jl = 4
+
+    flags = batch_dict['flags']
+    
     cuda = torch.device('cuda')
-    # batch_dict at input: {p, UDiv, flags, density}
-    assert len(batch_dict) == 4, "Batch must contain 4 tensors (p, UDiv, flags, density)"
+    # batch_dict at input: {p, UDiv, flags, density, flags_inflow}
+    assert len(batch_dict) == 5, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -68,7 +73,10 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
 
     #It is clearer to just multiply by mask (casted into Float)
     maskInside_f = maskInside.float().clone()
+    
+    #DEBUG
     UBC[:,:,:,0:4] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,0:4]).float()
+    #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
     UBCInvMask[:,:,:,0:4].masked_fill_(maskInside, 0)
 
     densityBC[:,:,:,0:4].masked_fill_(maskInside, density_val)
@@ -79,7 +87,7 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     maskOutside = (maskInside == 0)
     UBC[:,:,:,0:4].masked_fill_(maskOutside, 0)
     UBCInvMask[:,:,:,0:4].masked_fill_(maskOutside, 0)
-    
+
     # Insert the new tensors in the batch_dict.
     batch_dict['UBC'] = UBC
     batch_dict['UBCInvMask'] = UBCInvMask
@@ -88,6 +96,33 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
 
     # batch_dict at output = {p, UDiv, flags, density, UBC,
     #                         UBCInvMask, densityBC, densityBCInvMask}
+
+def createCilinder(batch_dict):
+    """
+    Creates a cilinder in the flags. It will be located in the point x = 64 and y = 80. 
+    Radius = 10
+    """
+    flags = batch_dict['flags']
+    resX = flags.size(4)
+    resY = flags.size(3)
+
+    # Here, we just impose initial conditions.
+    # Upper layer rho2, vel = 0
+    # Lower layer rho1, vel = 0
+
+
+    centerX = 64
+    centerY = 80    
+
+    radCyl = 10
+
+    X = torch.arange(0, resX, device=cuda).view(resX).expand((1,resY,resX))
+    Y = torch.arange(0, resY, device=cuda).view(resY, 1).expand((1,resY,resX))
+
+    dist_from_center = (X - centerX).pow(2) + (Y-centerY).pow(2)
+    mask_cylinder = dist_from_center <= radCyl * radCyl
+
+    flags = flags.masked_fill_(mask_cylinder, 2)
 
 def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     r"""Creates masks to enforce a Rayleigh-Taylor instability initial conditions.

@@ -130,14 +130,6 @@ T advectVel
   int bnd,
   const float maccormack_strength
 );
-    
-// Preconditioning
-    
-T Precon_Z
-(
-  float T flags, T div, T Precon,
-  float T A_next_i, T A_next_j
- ); 
 
 std::vector<T> solveLinearSystemJacobi
 (
@@ -148,18 +140,5 @@ std::vector<T> solveLinearSystemJacobi
    const int max_iter,
    const bool verbose
 );
-
-} // namespace fluid
-
-
-std::vector<T> solveLinearSystemPCG
-(
-   T flags,
-   T div,
-   const bool is_3d,
-   const float p_tol,
-   const int max_iter,
-   const bool verbose
- );
 
 } // namespace fluid
