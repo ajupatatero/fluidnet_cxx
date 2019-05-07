@@ -18,7 +18,7 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     
     cuda = torch.device('cuda')
     # batch_dict at input: {p, UDiv, flags, density, flags_inflow}
-    assert len(batch_dict) == 5, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow)"
+    assert len(batch_dict) == 4, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -45,13 +45,15 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     y = 1
     if (not is3D):
         #vec = (0,1)
-        vec = torch.arange(0,2, device=cuda)
+        vec = torch.arange(0,2, device=cuda).float()
     else:
-        vec = torch.arange(0,3, device=cuda)
+        vec = torch.arange(0,3, device=cuda).float()
         vec[2] = 0
 
     # vec = vec * u_scale (vinj)
     vec.mul_(u_scale)
+    print("V INJ = ", vec[1]) 
+    print("Scale", u_scale)
 
     # Equal to = vector size H, then reshaped to a matrix of size (H,1) and expanded
     index_x = torch.arange(0, xdim, device=cuda).view(xdim).expand_as(density[0][0])
@@ -160,8 +162,21 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     thick = mconf['perturbThickness']
     ampl = mconf['perturbAmplitude']
     h = mconf['height']
-    density = 0.5*(rho2+rho1 + (rho2-rho1)*torch.tanh(thick*(coord[:,1]/resY - \
-            (h + ampl*torch.cos(2*math.pi*(coord[:,0]/resX)))))).unsqueeze(1)
+
+    density = 0.5*(rho2+rho1 + (rho2-rho1)*torch.tanh(thick*((coord[:,1]/resY).float() - \
+            (h + ampl*torch.cos(2*math.pi*(coord[:,0]/resX).float()))))).unsqueeze(1)
+
+
+    print("bottom",  0.5*(rho2+rho1 + (rho2-rho1)*math.tanh(thick*((1) - \
+            (h + ampl*math.cos(2*math.pi*(64/resX)))))))
+
+    print("top",  0.5*(rho2+rho1 + (rho2-rho1)*math.tanh(thick*( - \
+            (h + ampl*math.cos(2*math.pi*(64/resX)))))))
+
+    print("density tensor", density[0,0,0,500:512, 0])
+    print("density tensor", density[0,0,0,0:10, 127])
+    print("density", density.shape)
+    print("height", h)
 
     batch_dict['density'] = density
     batch_dict['flags'] = flags

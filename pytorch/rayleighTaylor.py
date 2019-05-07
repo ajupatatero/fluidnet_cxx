@@ -40,7 +40,7 @@ parser.add_argument('--simConf',
         'Overwrites parameters from trainingConf file.\n'
         'Default: rayleighTaylorConfig.yaml')
 parser.add_argument('--trainingConf',
-        default='config.yaml',
+        default='trainConfig.yaml',
         help='R|Training yaml config file.\n'
         'Default: config.yaml')
 parser.add_argument('--modelDir',
@@ -60,9 +60,9 @@ arguments = parser.parse_args()
 
 # Loading a YAML object returns a dict
 with open(arguments.simConf, 'r') as f:
-    simConf = yaml.load(f)
+    simConf = yaml.load(f, Loader=yaml.FullLoader)
 with open(arguments.trainingConf, 'r') as f:
-    conf = yaml.load(f)
+    conf = yaml.load(f, Loader=yaml.FullLoader)
 
 if not arguments.restartSim:
     restart_sim = simConf['restartSim']
@@ -84,13 +84,16 @@ if restart_sim:
     with open(restart_config_file) as f:
         simConfig = yaml.load(f)
 
-conf['modelDir'] = arguments.modelDir or simConf['modelDir']
-assert (glob.os.path.exists(conf['modelDir'])), 'Directory ' + str(conf['modelDir']) + ' does not exists'
-conf['modelFilename'] = arguments.modelFilename or simConf['modelFilename']
-conf['modelDirname'] = conf['modelDir'] + '/' + conf['modelFilename']
+simConf['modelDir'] = arguments.modelDir or simConf['modelDir']
+assert (glob.os.path.exists(simConf['modelDir'])), 'Directory ' + str(SimConf['modelDir']) + ' does not exists'
+simConf['modelFilename'] = arguments.modelFilename or simConf['modelFilename']
+simConf['modelDirname'] = simConf['modelDir'] + '/' + simConf['modelFilename']
 resume = False # For training, at inference set always to false
 
-path = conf['modelDir']
+
+print('Active CUDA Device: GPU', torch.cuda.current_device())
+print()
+path = simConf['modelDir']
 path_list = path.split(glob.os.sep)
 saved_model_name = glob.os.path.join('/', *path_list, path_list[-1] + '_saved.py')
 temp_model = glob.os.path.join('lib', path_list[-1] + '_saved_simulate.py')
@@ -102,15 +105,15 @@ model_saved = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_saved)
 
 try:
-    te = lib.FluidNetDataset(conf, 'te', save_dt=4, resume=resume) # Test instance of custom Dataset
+    #te = lib.FluidNetDataset(conf, 'te', save_dt=4, resume=resume) # Test instance of custom Dataset
+    mconf = {}
+    #conf, mconf = te.createConfDict()
 
-    conf, mconf = te.createConfDict()
-
-    cpath = glob.os.path.join(conf['modelDir'], conf['modelFilename'] + '_conf.pth')
-    mcpath = glob.os.path.join(conf['modelDir'], conf['modelFilename'] + '_mconf.pth')
-    assert glob.os.path.isfile(mcpath), cpath  + ' does not exits!'
+    #cpath = glob.os.path.join(simConf['modelDir'], simConf['modelFilename'] + '_conf.pth')
+    mcpath = glob.os.path.join(simConf['modelDir'], simConf['modelFilename'] + '_mconf.pth')
+    #assert glob.os.path.isfile(mcpath), cpath  + ' does not exits!'
     assert glob.os.path.isfile(mcpath), mcpath  + ' does not exits!'
-    conf.update(torch.load(cpath))
+    #conf.update(torch.load(cpath))
     mconf.update(torch.load(mcpath))
 
     print('==> overwriting mconf with user-defined simulation parameters')
@@ -118,7 +121,7 @@ try:
     mconf.update(simConf)
 
     print('==> loading model')
-    mpath = glob.os.path.join(conf['modelDir'], conf['modelFilename'] + '_lastEpoch_best.pth')
+    mpath = glob.os.path.join(simConf['modelDir'], simConf['modelFilename'] + '_lastEpoch_best.pth')
     assert glob.os.path.isfile(mpath), mpath  + ' does not exits!'
     state = torch.load(mpath)
 
@@ -158,14 +161,22 @@ try:
         mconf['periodic-y'] = True
         mconf['periodic-x'] = False
 
-        net = model_saved.FluidNet(mconf, dropout=False)
+        net = model_saved.FluidNet(mconf, it, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
         net.load_state_dict(state['state_dict'])
 
+        density_a =  batch_dict['density'].clone()
+        rho_avg = torch.mean(density_a).item()
+        print("Avg rho 0 = " + str(rho_avg))
+
         print('Creating initial conditions')
         fluid.createRayleighTaylorBCs(batch_dict, mconf, rho1=rho1, rho2=rho2)
         # If restarting, overwrite all fields with checkpoint.
+
+        density_b =  batch_dict['density'].clone()
+        rho_avga = torch.mean(density_b).item()
+        print("Avg rho 1 = " + str(rho_avga))
 
         if restart_sim:
             # Check if restart file exists in folder
@@ -237,7 +248,18 @@ try:
                 color='black')
 
         while (it < max_iter):
-            lib.simulate(conf, mconf, batch_dict, net, method)
+
+            density_c =  batch_dict['density'].clone()
+            rho_avgc = torch.mean(density_c).item()
+            print("Avg rho 2 = " + str(rho_avgc))
+
+            method = mconf['simMethod']
+            lib.simulate(mconf, batch_dict, net, method, it)
+
+            density_d =  batch_dict['density'].clone()
+            rho_avgd = torch.mean(density_d).item()
+            print("Avg rho 3 = " + str(rho_avgd))
+
             density = batch_dict['density'].clone()
             center_X = resX // 2
             rho_at_center = density[0,0,0,:, center_X]
@@ -262,7 +284,9 @@ try:
                         batch_dict['flags'].clone())
                 pressure = batch_dict['p'].clone()
                 tensor_vel = fluid.getCentered(batch_dict['U'].clone())
+
                 density = batch_dict['density'].clone()
+
                 div = torch.squeeze(tensor_div).cpu().data.numpy()
                 np_mask = torch.squeeze(flags.eq(2)).cpu().data.numpy().astype(float)
                 rho = torch.squeeze(density).cpu().data.numpy()
@@ -391,7 +415,7 @@ try:
                     velx_masked = velx_masked.filled()
                     vely_masked = vely_masked.filled()
 
-                    divergence = np.ascontiguousarray(div[minX:maxX,minY:maxY])
+                    divergence = np.ascontiguousarray(div_np[minX:maxX,minY:maxY])
                     rho = np.ascontiguousarray(density_np[minX:maxX,minY:maxY])
                     p = np.ascontiguousarray(pressure_masked[minX:maxX,minY:maxY])
                     velx = np.ascontiguousarray(velx_masked[minX:maxX,minY:maxY])

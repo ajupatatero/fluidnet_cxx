@@ -367,7 +367,7 @@ def velocityUpdate(pressure, U, flags):
         # u = u - p(i,j)
         # 3) Cell is obstacle and left neighbour is fluid
         # u = u + p(i-1,j)
-        """
+        
         U[:,:,:,1:(h-1),1:(w-1)] = (mask_fluid * \
             (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
             mask_fluid_obstacle * \
@@ -385,19 +385,18 @@ def velocityUpdate(pressure, U, flags):
             mask_inflow_obstacle * \
             (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
             mask_no_fluid * (0))
-        """
         #print("flags After Adding 7", flags[0,0,0,0:5,30:64])
-        U[:,:,:,1:(h-1),1:(w-1)] = (mask_fluid * \
-            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
-             mask_fluid_obstacle * \
-            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - Pijk) + \
-            mask_obstacle_fluid * \
-            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) + Pijk_m) + \
-            #mask_inflow * \
-            #(U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
-            mask_fluid_inflow * \
-            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
-            mask_no_fluid * (0))
+        #U[:,:,:,1:(h-1),1:(w-1)] = (mask_fluid * \
+        #    (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+        #     mask_fluid_obstacle * \
+        #    (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - Pijk) + \
+        #    mask_obstacle_fluid * \
+        #    (U.narrow(4, 1, w-2).narrow(3, 1, h-2) + Pijk_m) + \
+        #    mask_inflow * \
+        #    (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+        #    mask_fluid_inflow * \
+        #    (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+        #    mask_no_fluid * (0))
         #print('******************************************************')
 
         #print('masks')

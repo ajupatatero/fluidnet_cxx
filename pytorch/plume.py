@@ -130,9 +130,10 @@ try:
     #********************************** Create the model ***************************
     with torch.no_grad():
 
+        it = 0
         cuda = torch.device('cuda')
 
-        net = model_saved.FluidNet(mconf, dropout=False)
+        net = model_saved.FluidNet(mconf, it, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
 
@@ -155,13 +156,13 @@ try:
         batch_dict['flags'] = flags
         batch_dict['density'] = density
         #We create a temporary flags for the inflow, in order to avoid affecting the advection
-        flags_i = flags.clone()
-        batch_dict['flags_inflow'] = flags_i
+        #flags_i = flags.clone()
+        #batch_dict['flags_inflow'] = flags_i
 
         real_time = simConf['realTimePlot']
         save_vtk = simConf['saveVTK']
         method = simConf['simMethod']
-        it = 0
+        #it = 0
 
         max_iter = simConf['maxIter']
         outIter = simConf['statIter']
@@ -251,13 +252,17 @@ try:
                 #headwidth=headwidth, headlength=headlength,
                 color='black')
 
+        #Time Vec Declaration
+        Time_vec = np.zeros(max_iter)
+
         # Main loop
         while (it < max_iter):
-            if it < 20:
+            if it < 100:
                 method = 'jacobi'
             else:
                 method = mconf['simMethod']
-            lib.simulate(mconf, batch_dict, net, method, it)
+            lib.simulate(mconf, batch_dict, net, method, Time_vec, folder, it)
+            #lib.simulate(mconf, batch_dict, net, method, it)
             if (it% outIter == 0):
                 print("It = " + str(it))
                 tensor_div = fluid.velocityDivergence(batch_dict['U'].clone(),
@@ -285,6 +290,15 @@ try:
                 img_velx_masked = img_velx_masked.filled()
                 img_vely_masked = img_vely_masked.filled()
                 img_vel_norm_masked = img_vel_norm_masked.filled()
+
+                filename3 = folder + '/Rho_output_{0:05}'.format(it)
+                np.save(filename3,rho[minY:maxY,minX:maxX])
+
+                filename4 = folder + '/Uy_output_{0:05}'.format(it)
+                np.save(filename4,img_vely[minY:maxY,minX:maxX])
+
+                filename5 = folder + '/Div_output_{0:05}'.format(it)
+                np.save(filename5,div[minY:maxY,minX:maxX])
 
                 if real_time:
                     cax_rho.clear()
