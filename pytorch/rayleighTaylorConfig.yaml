@@ -16,13 +16,13 @@ restartSim: false
 realTimePlot: false
 # saveVTK : set to true to save results as structured VTK files
 # use Paraview to load those files.
-saveVTK: false
+saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/path/to/output/folder"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/jacobi"
 # simMethod: choose convnet or jacobi
-simMethod: "convnet"
+simMethod: "jacobi"
 # modelDir : location of trained model
-modelDir: "/path/to/model/directory"
+modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
@@ -30,7 +30,7 @@ dt: 0.5
 # statIter : iterations frequency for output
 statIter: 10
 # maxIter : maximum number of simulation iterations
-maxIter: 20000
+maxIter: 2000
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -69,8 +69,8 @@ gravityVec:
     y:  1.0
     z:  0.0
 # Rayleigh Taylor parameters
-rho2: 0.01
-rho1: -0.01
+rho2: 0.1
+rho1: -0.1
 perturbThickness: 100
 perturbAmplitude : 0.01
 height: 0.5

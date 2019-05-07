@@ -18,7 +18,7 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_plume_Debug/Inflow_channel/BC/Debug"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Result_plume_Corrected/No_Cylinder/Ri_37_12/Mix_100"
 # simMethod: choose convnet or jacobi
 simMethod: "convnet"
 # modelDir : location of trained model
@@ -27,7 +27,8 @@ modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
-dt: 0.1
+# dt: 0.1
+dt: 3
 # statIter : iterations frequency for output
 statIter: 10
 # maxIter : maximum number of simulation iterations
@@ -45,7 +46,8 @@ maccormackStrength: 0.6
 # rho_0 being the average density and delta_rho local difference of density
 # w.r.t average density.
 # Mantaflow calls (1) gravity and (2) buoyancy and allows for different g's 
-buoyancyScale: !!python/float 0.25
+#buoyancyScale: !!python/float 0.25
+buoyancyScale: !!python/float 0.02
 gravityScale: 0
 # Introduces a correcting factor in the denisty equation 
 # from "A splitting method for incompressible flows with variable
@@ -70,8 +72,10 @@ gravityVec:
     y: -1.0
     z:  0.0
 # injectionDensity : density at buoyant plume inlet
-injectionDensity: 0.1
+#injectionDensity: 0.1
+injectionDensity: 0.25
 # sourceRadius : radius of inlet zone w.r.t the center of x-axis
 sourceRadius: 0.145
 # injectionVelocity : inlet velocity
-injectionVelocity: 2
+#injectionVelocity: 1.82
+injectionVelocity: 0.05
