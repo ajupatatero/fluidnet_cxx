@@ -67,7 +67,7 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
         index_ten = torch.stack((index_x, index_y, index_z), dim=0)
 
     #TODO 3d implementation
-    indx_circle = index_ten[:,:,0:4]
+    indx_circle = index_ten[:,:,1:4]
     indx_circle[0] -= centerX
     maskInside = (indx_circle[0].pow(2) <= plumeRad*plumeRad)
 
@@ -77,24 +77,28 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     maskInside_f = maskInside.float().clone()
     
     #DEBUG
-    UBC[:,:,:,0:4] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,0:4]).float()
+    UBC[:,:,:,1:4] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,1:4]).float()
     #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
-    UBCInvMask[:,:,:,0:4].masked_fill_(maskInside, 0)
+    UBCInvMask[:,:,:,1:4].masked_fill_(maskInside, 0)
 
-    densityBC[:,:,:,0:4].masked_fill_(maskInside, density_val)
-    densityBCInvMask[:,:,:,0:4].masked_fill_(maskInside, 0)
+    densityBC[:,:,:,1:4].masked_fill_(maskInside, density_val)
+    densityBCInvMask[:,:,:,1:4].masked_fill_(maskInside, 0)
 
     # Outside the plume. Set the velocity to zero and leave density alone.
 
     maskOutside = (maskInside == 0)
-    UBC[:,:,:,0:4].masked_fill_(maskOutside, 0)
-    UBCInvMask[:,:,:,0:4].masked_fill_(maskOutside, 0)
+    UBC[:,:,:,1:4].masked_fill_(maskOutside, 0)
+    UBCInvMask[:,:,:,1:4].masked_fill_(maskOutside, 0)
 
     # Insert the new tensors in the batch_dict.
     batch_dict['UBC'] = UBC
     batch_dict['UBCInvMask'] = UBCInvMask
     batch_dict['densityBC'] = densityBC
     batch_dict['densityBCInvMask'] = densityBCInvMask
+
+    #Debug 03/06/19
+    #print("UBC INV mask ", UBCInvMask)
+    #print("UBC mask ", UBC)
 
     # batch_dict at output = {p, UDiv, flags, density, UBC,
     #                         UBCInvMask, densityBC, densityBCInvMask}

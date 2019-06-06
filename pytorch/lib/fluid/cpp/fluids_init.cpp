@@ -1,4 +1,5 @@
 #include "fluids_init.h"
+#include <torch/torch.h>
 
 namespace fluid {
 
@@ -880,7 +881,6 @@ std::vector<T> solveLinearSystemJacobi
     }
     maskBorder.unsqueeze_(1);
 
-    // Zero pressure on the border.
     cur_p->masked_fill_(maskBorder, 0);
     mCont.masked_fill_(maskBorder, 0);
 
@@ -966,14 +966,15 @@ std::vector<T> solveLinearSystemJacobi
     p_delta.resize_({bsz, 1, d, h, w});
     residual = p_delta_norm.max();
     if (verbose) {
-      std::cout << "Jacobi iteration " << (iter + 1) << ": residual "
-                << residual << std::endl;
+      //std::cout << "Jacobi iteration " << (iter + 1) << ": residual "
+      //          << residual << std::endl;
     }
 
     if (residual.item().to<float>() < p_tol) {
       if (verbose) {
         std::cout << "Jacobi max residual fell below p_tol (" << p_tol
                   << ") (terminating)" << std::endl;
+        std::cout << "Residual: --------------------------------------> " << residual.item().to<float>()  << std::endl;
       }
       break;
     }
@@ -983,6 +984,7 @@ std::vector<T> solveLinearSystemJacobi
         if (verbose) {
           std::cout << "Jacobi max iteration count (" << max_iter
                     << ") reached (terminating)" << std::endl;
+          std::cout << "Residual: --------------------------------------> " << residual.item().to<float>()  << std::endl;
         }
         break;
     }
@@ -1002,13 +1004,881 @@ std::vector<T> solveLinearSystemJacobi
   // TODO: write mean-subtraction (FluidNet does it in Lua)
   return {p, residual};
 }
+ 
+    
+// We declare the Preconditioner module
+
+T Precon_Z
+(
+    T& flags, 
+    T& div, 
+    T& residual, 
+    T& Precon, 
+    T& A_next_i, 
+    T& A_next_j
+){
+    
+    //const int batch = 1;
+ 
+    int batch = flags.size(0)-1;
+    //int d = flags.size(2);
+    int h = flags.size(3);
+    int w = flags.size(4);
+    //bool is3D = (d > 1);
+           
+    T Temporal_1 = zeros_like(div); // Floating zero
+    T Temporal_2 = zeros_like(div); // Floating zero
+    T Q = zeros_like(div); // Floating zero
+    T Z = zeros_like(div); // Floating zero
+    
+
+    // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+   
+    //std::cout << "Debug 12 Z" << std::endl;
+ 
+    for( int i = 0; i < w; i = i + 1 ) {
+        for( int j = 0; j < h; j = j + 1 ) {
 
 
+            T Intermediate = flags[batch][0][0][j][i];
+
+            float flag_val = Intermediate.item().to<float>();
+            bool isfluid = (flag_val < 2.0);
+   
+            //std::cout << "Is fluid i "<< i << "j " << j << ": "<< isfluid  << std::endl;
+
+            //std::cout << "Residual i "<< i << "j " << j << ": "<< residual[batch][0][0][i][j]  << std::endl;
+            //std::cout << "A next i, i "<< i << "j " << j << ": "<< A_next_i[batch][0][0][i][j]  << std::endl;
+            //std::cout << "A next j, i "<< i << "j " << j << ": "<< A_next_j[batch][0][0][i][j]  << std::endl;
+            //std::cout << "Precon i "<< i << "j " << j << ": "<< Precon[batch][0][0][i][j]  << std::endl;
+
+            //If the corresponding position is fluid: Algo from Bridson pg 65
+            if (isfluid) {
+               Z[batch][0][0][j][i] = Precon[batch][0][0][j][i] * (
+                                      residual[batch][0][0][j][i]  
+                                      - (A_next_i[batch][0][0][j][i-1]*Precon[batch][0][0][j][i-1]*Z[batch][0][0][j][i-1])
+                                      - (A_next_j[batch][0][0][j-1][i]*Precon[batch][0][0][j-1][i]*Z[batch][0][0][j-1][i])  );
+
+            // We have just solved the equation Lq =r
+            //   Q[batch][0][0][j][i] = Temporal_1[batch][0][0][j][i]*Precon[batch][0][0][j][i];
+
+            }
+
+            //std::cout << "Temporal i "<< i << "j " << j << ": "<< Temporal[batch][0][0][i][j]  << std::endl;
+            //std::cout << "Q i "<< i << "j " << j << ": "<< Q[batch][0][0][j][i]  << std::endl;
+
+        }
+    }
+    
+    // Now we attack the equation L^T z = q
+    // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+    
+    for( int i = w-1; i > 0; i = i - 1 ) {
+        for( int j = h-1; j > 0; j = j - 1 ) {
+
+            T Intermediate = flags[batch][0][0][j][i];
+            float flag_val = Intermediate.item().to<float>();
+ 
+            bool isfluid = (flag_val < 2.0);
+
+            //If the corresponding position is fluid: Algo from Bridson pg 65
+            if (isfluid) {
+                Z[batch][0][0][j][i] = Precon[batch][0][0][j][i]* (
+                                           Z[batch][0][0][j][i] 
+                                           - (A_next_i[batch][0][0][j][i]*Precon[batch][0][0][j][i]*Z[batch][0][0][j][i+1])
+                                           - (A_next_j[batch][0][0][j][i]*Precon[batch][0][0][j][i]*Z[batch][0][0][j+1][i])   );
+
+                //Z[batch][0][0][j][i] = Temporal_2[batch][0][0][j][i]*Precon[batch][0][0][j][i];
+
+            }
+            //std::cout << "Z i "<< i << "j " << j << ": "<< Z[batch][0][0][j][i]  << std::endl;          
+        }
+    }
+
+    return Z;
+}
+    
+
+// We now declare the PCG solving
+
+std::vector<T> solveLinearSystemPCG
+(
+     T flags,
+     T div,
+     const bool is3D,
+     const float p_tol = 1e-5,
+     const int max_iter = 1000,
+     const bool verbose = false
+) {
+        auto options = div.options();
+        
+        //Debug Printing
+        //std::cout << "Debug 0" << std::endl;    
+    
+        // Check arguments.
+        T p = zeros_like(flags);
+
+        T mean_grid = ones_like(flags);
+
+            
+
+	// Start with the output of the next iteration going to pressure.
+	T cur_p = p;
+	        
+        // Create the A_diagonal and A_next_i,  A_next_j, A_next_k
+        
+        T A_diag = zeros_like(flags);
+        
+        T A_left = ones_like(flags);
+        T A_bot = ones_like(flags);
+        T A_back = ones_like(flags);
+        T A_right = ones_like(flags);
+        T A_up = ones_like(flags);
+        T A_front = ones_like(flags);
+
+        T A_fluid = zeros_like(flags);
+      
+        T A_next_i = zeros_like(flags);
+        T A_next_j = zeros_like(flags);
+        T A_next_k = zeros_like(flags);
+        
+        // Constant initializing
+        
+        const int32_t bnd =1;
+        const float dt = 5;        
+        
+        AT_ASSERTM(p.dim() == 5 && flags.dim() == 5 && div.dim() == 5,
+                   "Dimension mismatch");
+        AT_ASSERTM(flags.size(1) == 1, "flags is not scalar");
+        int bsz = flags.size(0);
+        int d = flags.size(2);
+        int h = flags.size(3);
+        int w = flags.size(4);
+
+        //Debug Printing
+        //std::cout << "Debug 1" << std::endl;
+
+        //int numel = d * h * w;
+        AT_ASSERTM(p.is_same_size(flags), "size mismatch");
+        AT_ASSERTM(div.is_same_size(flags), "size mismatch");
+        if (!is3D) {
+            AT_ASSERTM(d == 1, "d > 1 for a 2D domain");
+        }
+        
+        AT_ASSERTM(p.is_contiguous() && flags.is_contiguous() &&
+                   div.is_contiguous(), "Input is not contiguous");
+        
+        //T p_prev = at::zeros({bsz, 1, d, h, w}, options).toType(p.scalar_type());
+        //T p_delta = at::zeros({bsz, 1, d, h, w}, options).toType(p.scalar_type());
+        //T p_delta_norm = at::zeros({bsz}, options).toType(p.scalar_type());
+        
+        
+        // Kernel: Jacobi Iteration
+        T mCont = at::ones({bsz, 1, d, h, w}, options).toType(at::kByte); // Continue mask
+        
+        T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz, d, h, w}).toType(at::kLong);
+        T idx_y = at::arange(0, h, options).view({1,h,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
+        T idx_z = zeros_like(idx_x);
+        if (is3D) {
+            idx_z = at::arange(0, d, options).view({1,d,1,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
+        }
+        
+        T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(at::kLong);
+        idx_b = idx_b.expand({bsz,d,h,w});
+        
+        T maskBorder = (idx_x < bnd).__or__
+        (idx_x > w - 1 - bnd).__or__
+        (idx_y < bnd).__or__
+        (idx_y > h - 1 - bnd);
+        if (is3D) {
+            maskBorder = maskBorder.__or__(idx_z < bnd).__or__
+            (idx_z > d - 1 - bnd);
+        }
+        maskBorder.unsqueeze_(1);
+
+        //Debug Printing
+        //std::cout << "Debug 2" << std::endl;
+
+        // Zero pressure on the border.
+	cur_p.masked_fill_(maskBorder, 0);
+        mCont.masked_fill_(maskBorder, 0);
+        
+        T zero_f = at::zeros_like(p); // Floating zero
+        T zero_l = at::zeros_like(p).toType(at::kLong); // Long zero (for index)
+        T zeroBy = at::zeros_like(p).toType(at::kByte); // Long zero (for index)
+        T oneBy = at::ones_like(p).toType(at::kByte); // Long zero (for index)
+        // Otherwise, we are in a fluid or empty cell.
+        // First, we get all the neighbors.
+        
+        //T pC = *cur_p_prev;
+        
+        T i_l = zero_l.where( (idx_x <=0), idx_x - 1);
+        //T p1 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, idx_y, i_l})
+        //    .unsqueeze(1));
+        
+        T i_r = zero_l.where( (idx_x > w - 1 - bnd), idx_x + 1);
+        //T p2 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, idx_y, i_r})
+        //    .unsqueeze(1));
+        
+        T j_l = zero_l.where( (idx_y <= 0), idx_y - 1);
+        //T p3 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, j_l, idx_x})
+        //    .unsqueeze(1));
+        T j_r = zero_l.where( (idx_y > h - 1 - bnd), idx_y + 1);
+        //T p4 = zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, j_r, idx_x})
+        //    .unsqueeze(1));
+        
+        T k_l = zero_l.where( (idx_z <= 0), idx_z - 1);
+        //T p5 = is3D ? zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, k_l, idx_y, idx_x})
+        //    .unsqueeze(1)) : zero_f;
+        T k_r = zero_l.where( (idx_z > d - 1 - bnd), idx_z + 1);
+        //T p6 = is3D ? zero_f.
+        //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, k_r, idx_y, idx_x})
+        //    .unsqueeze(1)) : zero_f;
+        
+        //Debug Printing
+        //std::cout << "Debug 4" << std::endl;
+
+        T neighborLeftObs = mCont.__and__(zeroBy.
+                                          where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_l}).eq(TypeObstacle)));
+        T neighborRightObs = mCont.__and__(zeroBy.
+                                           where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeObstacle)));
+        T neighborBotObs = mCont.__and__(zeroBy.
+                                            where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_l, idx_x}).eq(TypeObstacle)));
+        T neighborUpObs = mCont.__and__(zeroBy.
+                                        where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeObstacle)));
+        T neighborBackObs = oneBy;
+        T neighborFrontObs = oneBy;
+        
+        if (is3D) {
+            T neighborBackObs = mCont.__and__(zeroBy.
+                                              where(mCont.ne(1), flags.index({idx_b, zero_l, k_l, idx_y, idx_x}).eq(TypeObstacle)));
+            T neighborFrontObs = mCont.__and__(zeroBy.
+                                               where(mCont.ne(1), flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeObstacle)));
+        }
+
+
+        //T neighborLeftObs = mCont.__and__(zeroBy.
+        //                                  where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_l}).eq(TypeObstacle)).unsqueeze(1));
+        //T neighborRightObs = mCont.__and__(zeroBy.
+        //                                   where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeObstacle)).unsqueeze(1));
+        //T neighborBotObs = mCont.__and__(zeroBy.
+        //                                 where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_l, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        //T neighborUpObs = mCont.__and__(zeroBy.
+        //                                where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        //T neighborBackObs = zeroBy;
+        //T neighborFrontObs = zeroBy;
+        
+        //if (is3D) {
+        //    T neighborBackObs = mCont.__and__(zeroBy.
+        //                                      where(mCont.ne(1), flags.index({idx_b, zero_l, k_l, idx_y, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        //    T neighborFrontObs = mCont.__and__(zeroBy.
+        //                                       where(mCont.ne(1), flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+        //}
+
+
+
+        //Debug Printing
+        //std::cout << "Debug 5" << std::endl;
+        
+        // Depending on the dimension our fluid will start on 2 or 3 (Laplacian scheme)
+        const float dnom = is3D ? 3 : 2;
+       
+        //The basic flag where 1 = fluid (objects and borders = 0)
+        //T fluid_flag = mCont.__and__(zeroBy.
+        //                             where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeObstacle)).unsqueeze(1));
+
+ 
+        //The basic flag where 1 = fluid (objects and borders = 0)
+        T fluid_flag = flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeFluid);
+
+        //Debug Printing
+        //std::cout << "Debug 5.5" << std::endl;
+
+        // 1 where fluid and no borcer in the left/bottom/back
+        A_left.masked_fill_(neighborLeftObs, 0);
+        A_bot.masked_fill_(neighborBotObs, 0);
+        A_back.masked_fill_(neighborBackObs, 0);
+
+        A_right.masked_fill_(neighborRightObs, 0);
+        A_up.masked_fill_(neighborUpObs, 0);
+        A_front.masked_fill_(neighborFrontObs, 0);
+
+        A_left.masked_fill_(fluid_flag.ne(1), 0);
+        A_bot.masked_fill_(fluid_flag.ne(1), 0);
+        A_back.masked_fill_(fluid_flag.ne(1), 0);
+
+        A_right.masked_fill_(fluid_flag.ne(1), 0);
+        A_up.masked_fill_(fluid_flag.ne(1), 0);
+        A_front.masked_fill_(fluid_flag.ne(1), 0);
+
+        //Debug Printing
+        //std::cout << "Debug 5.55" << std::endl;
+
+        A_fluid.masked_fill_(fluid_flag, dnom);
+
+        //Debug Printing
+        //std::cout << "Debug 5.65" << std::endl; 
+
+        //Watch the A_diagonal structure
+        //A_diag = A_fluid+A_left+A_bot+A_back;
+        A_diag = A_left+A_bot+A_back+A_right+A_up+A_front;
+        //A_diag = A_diag * dt;
+ 
+        //Debug Printing
+        //std::cout << "Debug 5.75" << std::endl; 
+
+        //Similar procedure for the A_next_i/j/k
+        //We will have -1 when the cell is fluid and the cellule to the right/top/front is fluid
+        A_next_i.masked_fill_(neighborRightObs.ne(1),-1);
+        A_next_j.masked_fill_(neighborUpObs.ne(1),-1);
+        A_next_k.masked_fill_(neighborFrontObs.ne(1),-1);
+
+
+        //A_next_i.masked_fill_(fluid_flag.eq(1),-1);
+        //A_next_j.masked_fill_(fluid_flag.eq(1),-1);
+        //A_next_k.masked_fill_(fluid_flag.eq(1),-1);
+
+        A_next_i.masked_fill_(mCont.ne(1),0);
+        A_next_j.masked_fill_(mCont.ne(1),0);
+        A_next_k.masked_fill_(mCont.ne(1),0);
+
+        //A_next_i.masked_fill_(fluid_flag.ne(1),0);
+        //A_next_j.masked_fill_(fluid_flag.ne(1),0);
+        //A_next_k.masked_fill_(fluid_flag.ne(1),0);
+ 
+        //A_next_i = A_next_i* dt;
+        //A_next_j = A_next_j* dt;
+        //A_next_k = A_next_k* dt;
+
+        mean_grid.masked_fill_(mCont.ne(1),0);
+        T mean_grid_mono = mean_grid.sum();
+        //Debug Printing
+        //std::cout << "Debug 6" << std::endl;
+ 
+        if (max_iter < 1) {
+            AT_ERROR("At least 1 iteration is needed (maxIter < 1)");
+        }
+       
+
+        // Initialization
+        // We will create a diagonal mask + a mask for the terms outside the diagonal
+        //
+        
+        T ones = ones_like(flags).toType(at::kByte);;
+        T zeros = zeros_like(flags).toType(at::kByte);;
+        
+        T Diag_mask = fluid_flag.__and__(where(idx_x.eq(idx_y),ones,zeros));
+        T I_plus_mask = fluid_flag.__and__(where(i_r.eq(idx_y),ones,zeros));
+        T I_minus_mask = fluid_flag.__and__(where(i_l.eq(idx_y),ones,zeros));
+        T J_plus_mask = fluid_flag.__and__(where(idx_x.eq(j_r),ones,zeros));
+        T J_minus_mask = fluid_flag.__and__(where(idx_x.eq(j_l),ones,zeros));
+
+        //for( int i = 0; i < w; i = i + 1 ) {
+        //   for( int j = 0; j < h; j = j + 1 ) {
+               //std::cout << "Diag_mask i "<< i << "j " << j << ": "<< Diag_mask[0][0][0][j][i]  << std::endl;
+               //std::cout << "I_plus_mask i "<< i << "j " << j << ": "<< I_plus_mask[0][0][0][j][i]  << std::endl;
+               //std::cout << "I_minus_mask i "<< i << "j " << j << ": "<< I_minus_mask[0][0][0][j][i]  << std::endl;
+               //std::cout << "J_plus_mask i "<< i << "j " << j << ": "<< J_plus_mask[0][0][0][j][i]  << std::endl;
+               //std::cout << "J_minus_mask i "<< i << "j " << j << ": "<< J_minus_mask[0][0][0][j][i]  << std::endl;
+        //   }
+        //}
+        // 
+        // STEP 1
+        //
+        // Initialize the pressure to zero.
+        //
+
+        p.zero_();
+
+
+        // 
+        // STEP 2
+        //
+        // Set the residual = b (div)
+        //                           
+        
+        T residual = div.clone();
+
+        //dt
+        //Debug Printing
+        //std::cout << "Debug 7" << std::endl;
+
+       
+       // We will first calculate the preconditioner
+        
+        // We declare the tuning constant (tau) and the safety constant (sigma)
+        // E_diag and Precon will have the size i,j, k (same as flags)
+        const float tau = 0.97;
+        const float Safety = 0.25;
+        //const int k = 0;
+        
+        T E_diag = zeros_like(div); // Floating zero
+        T Precon = zeros_like(div); // Floating zero
+        T W = zeros_like(div); // Floating zero
+        T z = zeros_like(div); // Floating zero
+
+        // BATCH LOOP!!!!!!
+        //
+        //
+
+        //Debug Printing
+        //std::cout << "Debug 8" << std::endl;
+
+        for( int batch=0; batch<bsz; batch = batch +1){
+        
+            // Start with the output of the next iteration going to pressure.
+            //T* cur_p = &p;
+            //T* cur_p_prev = &p_prev;
+            //RealGrid* cur_pressure_prev = &pressure_prev;       
+            //Debug Printing
+            //std::cout << "Debug 9" << std::endl;      
+
+            //Debug Printing
+            //std::cout << "Debug 10" << std::endl;
+
+            // PRECONDTIONER ALGORITHM
+            // !!!!!!!!!!!!!!!!!!
+        
+            // APPLYING THE PRECONDITIONER
+            // z = M r
+            //  for i j k
+            //    if fluid:
+            //      t = r - Aplus_i*precon(i-1) *q(i-1)
+            //            - Aplus_j*precon(j-1)* q(j-1)
+            //    q = t * precon
+            //  for i j k
+            //    if fluid:
+            //      t = q - Aplus_i*precon(i)*z(i+1)
+            //            - Aplus_j*precon(j)*z(j+1)
+            //    z = t * precon
+        
+            // T z = dot product M * residual
+            // We will first calculate the preconditioner
+        
+            // We declare the tuning constant (tau) and the safety constant (sigma)
+            // E_diag and Precon will have the size i,j, k (same as flags)
+            
+            //const int k = 0;
+        
+            //Debug Printing
+
+            //std::cout << "Debug 11" << std::endl;
+        
+
+            // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+
+            for( int i = 0; i < w; i = i + 1 ) {
+                for( int j = 0; j < h; j = j + 1 ) {
+
+                   T Intermediate = flags[batch][0][0][j][i];
+                   float flag_val = Intermediate.item().to<float>();
+                   bool isfluid = (flag_val < 2.0);
+
+                   //std::cout << "flags " <<  flags[0][0][0][i][j]  << std::endl;
+                   //std::cout << "A_fluid " <<  A_fluid[0][0][0][i][j]  << std::endl;
+                   //std::cout << "fluid flag " <<  fluid_flag[0][0][0][i][j]  << std::endl;
+                   //std::cout << "dnom " <<  dnom  << std::endl;
+
+                   //std::cout << "neighborLeftObs  " <<  neighborLeftObs[0][0][0][i][j]  << std::endl;
+                   //std::cout << "A_left " <<  A_left[0][0][0][i][j]  << std::endl;
+
+                   //std::cout << "neighborBotObs  " <<  neighborBotObs[0][0][0][i][j]  << std::endl;
+                   //std::cout << "A_bot " <<  A_bot[0][0][0][i][j]  << std::endl;
+
+                   //std::cout << "neighborBackObs  " <<  neighborBackObs[0][0][0][i][j]  << std::endl;
+                   //std::cout << "A_back " <<  A_back[0][0][0][i][j]  << std::endl;
+
+                   //std::cout << "Is fluid i "<< i << "j " << j << ": "<< isfluid  << std::endl;
+            
+                   //std::cout << "Adiag i "<< i << "j " << j << ": "<< A_diag[batch][0][0][j][i]  << std::endl;
+                   //std::cout << "A next i, i "<< i << "j " << j << ": "<< A_next_i[batch][0][0][j][i]  << std::endl;
+                   //std::cout << "A next j, i "<< i << "j " << j << ": "<< A_next_j[batch][0][0][j][i]  << std::endl;
+                   //std::cout << "Precon i "<< i << "j " << j << ": "<< Precon[batch][0][0][i][j]  << std::endl;
+
+                   //If the corresponding position is fluid: Algo from Bridson pg 65
+                   if (isfluid) {
+
+                       E_diag[batch][0][0][j][i] = A_diag[batch][0][0][j][i]
+                                                     -  (A_next_i[batch][0][0][j][i-1]*Precon[batch][0][0][j][i-1]).pow(2)
+                                                     -  (A_next_j[batch][0][0][j-1][i]*Precon[batch][0][0][j-1][i]).pow(2)
+                                                     -  tau * (
+                                                            A_next_i[batch][0][0][j][i-1]*A_next_j[batch][0][0][j][i-1]*((Precon[batch][0][0][j][i-1]).pow(2))  + 
+                                                            A_next_j[batch][0][0][j-1][i]*A_next_i[batch][0][0][j-1][i]*((Precon[batch][0][0][j-1][i]).pow(2))   );
+
+
+                       //std::cout << "E diag i "<< i << "j " << j << ": "<< E_diag[batch][0][0][j][i]  << std::endl;
+                       //std::cout << "A next i i-1 "<< i-1 << "j " << j << ": "<< A_next_i[batch][0][0][j][i-1]  << std::endl;
+                       //std::cout << "A next i i "<< i << "j-1 " << j-1 << ": "<< A_next_i[batch][0][0][j-1][i]  << std::endl;
+                       //std::cout << "A next j i-1 "<< i-1 << "j " << j << ": "<< A_next_j[batch][0][0][j][i-1]  << std::endl; 
+                       //std::cout << "A next j i  "<< i << "j-1 " << j-1 << ": "<< A_next_j[batch][0][0][j-1][i]  << std::endl;
+                       //std::cout << "Precon i-1 "<< i-1 << "j " << j << ": "<< Precon[batch][0][0][j][i-1]  << std::endl;
+                       //std::cout << "Precon i "<< i << "j-1 " << j << ": "<< Precon[batch][0][0][j-1][i]  << std::endl;
+                       //std::cout << "----------------------------------------------------------"<< std::endl;
+
+                       // Chek if the value is too low (sec factor * diag). If so, E_Diag = A_diag
+                       T Inter_1 = E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i];
+
+                       //std::cout << "E diagonal i "<< i << "j " << j << ": "<< E_diag[batch][0][0][i][j]  << std::endl;
+                  
+                       float Diag_value = Inter_1.item().to<float>();
+                       bool isSmall = (Diag_value < 0);
+                       if ( isSmall) {
+                           E_diag[batch][0][0][j][i] = A_diag[batch][0][0][j][i];
+                        }
+
+               
+                       //Finally, the precondtionner will be equal to 1/sqrt(E)
+                       Precon[batch][0][0][j][i]= 1 / ((E_diag[batch][0][0][j][i]).pow(0.5));
+
+                       //std::cout << "Precon i "<< i << "j " << j << ": "<< Precon[batch][0][0][j][i]  << std::endl;
+                   }
+                }
+            }
+
+            //Debug Printing
+
+            //std::cout << "Precon i 1 " << "j 1 " << ": "<< Precon[0][0][0][1][1]  << std::endl;
+            //std::cout << "Precon i 1 " << "j 2 " << ": "<< Precon[0][0][0][1][2]  << std::endl;
+            //std::cout << "Precon i 2 " << "j 1 " << ": "<< Precon[0][0][0][2][1]  << std::endl;
+
+            //std::cout << "Debug 12" << std::endl;
+    
+            // Once we have calculated the preconditioner, we should now solve z = Mr
+            //T z = Precon_Z(flags, div, residual, Precon, A_next_i,A_next_j);
+            T z = residual.clone();
+            // At this point we will get our first sigma:
+            // Sigma = z*r
+            // We first calculate the mono dim Tensor, then cast it to a pointer and then to a float
+            //
+            // 100% Sure there is a WAYYYY better method
+
+
+            //std::cout << "Z ==> : "<< z  << std::endl;
+
+            //
+            //After applying the preconditioner to  the residual to get z,
+            //We change the search tensor s=z
+
+            T s = z.clone();
+            //T s = residual.clone();
+            //std::cout << "s ==> : "<< s  << std::endl;
+
+            //std::cout << "z init " << (z.sum()).item().to<float>()  << std::endl;
+
+      
+           
+            //std::cout << "z init " << (z.sum()).item().to<float>()  << std::endl;
+            //std::cout << "residual init " << (residual.sum()).item().to<float>()  << std::endl;
+            //std::cout << "sigma init " << (Sigma_big.sum()).item().to<float>()  << std::endl;
+            //std::cout << "Max residual init " << (abs(residual).max()).item().to<float>()  << std::endl;
+
+
+            //T Transposed_Z = z.clone();
+
+            //for( int i = 0; i < w; i = i + 1 ) {
+            //    for( int j = 0; j < h; j = j + 1 ) {
+            //       Transposed_Z[0][0][0][i][j] = z[0][0][0][j][i];
+            //    }
+            // }
+
+            T Sigma_mono = (residual * residual).sum();
+            float Sigma = Sigma_mono.item().to<float>();
+            //std::cout << "Z First ==> : "<< z  << std::endl;
+
+            //std::cout << "Sigma init " << Sigma_mono.item().to<float>()  << std::endl;
+            //std::cout << "Sigma " << Sigma  << std::endl;
+           
+            // We now initialize the search and residual_max tensor and the alpha/beta ctes. 
+
+            T residual_max = zeros_like(Sigma_mono);
+         
+            float beta=0;        
+
+            //Debug Printing
+            //            
+            //std::cout << "Debug 13" << std::endl;
+
+            //Declare the Neighbours for the operation z = A * s
+            //There should be a better method I suppose
+        
+            T S_diag = zeros_like(div);
+            T S_minus_i = zeros_like(div);
+            T S_plus_i = zeros_like(div);
+            T S_minus_j = zeros_like(div);
+            T S_plus_j = zeros_like(div);
+
+            T P_minus_i = zeros_like(div);
+            T P_plus_i = zeros_like(div);
+            T P_minus_j = zeros_like(div);
+            T P_plus_j = zeros_like(div);
+
+            T W = zeros_like(div);
+
+            S_diag = s.clone();
+            S_minus_i = s.clone();
+            S_plus_i = s.clone();
+            S_minus_j = s.clone();
+            S_plus_j = s.clone();
+
+            S_diag.masked_fill_(Diag_mask.ne(1),0);
+            S_minus_i.masked_fill_(I_minus_mask.ne(1),0);
+            S_plus_i.masked_fill_(I_plus_mask.ne(1),0);
+            S_minus_j.masked_fill_(J_minus_mask.ne(1),0);
+            S_plus_j.masked_fill_(J_plus_mask.ne(1),0);
+
+            //Debug Printing
+            //            
+            //std::cout << "Debug 14" << std::endl;        
+
+        
+            // We initialize the iterations and we start the cycle.
+            // It will run until the residual  is too small        
+            int64_t iter = 0;
+
+            //Debug Printing
+            //            
+            //std::cout << "Debug 15" << std::endl;
+
+            while (true) {
+           
+              
+                residual_max = (abs(residual)).max();
+                //std::cout << "Residual: " << residual_max.item().to<float>() << " Max Tol "<<  p_tol << std::endl;
+ 
+                //if (residual_max.item().to<float>() < p_tol) {
+                //    if (verbose) {
+                //        std::cout << "The residual is already small enough, P = 0" << std::endl;
+                //    }
+                //    break;
+                //}
+
+                //std::cout << "Residual 15: " << residual_max.item().to<float>()  << std::endl;
+
+                //Debug Printing
+                //            
+                //std::cout << "Debug 16" << std::endl;
+                //Algorithm !!!!!!!!!!!!!!!!!!!
+                //
+
+
+////////// TODOOOOO THINK HOW TO ONLY MULTIPLY THE DIAGONAL TERMS OF S	
+              
+
+                //std::cout << "Adiag i "<< A_diag  << std::endl;
+                //std::cout << "A next i "<< A_next_i  << std::endl;
+                //std::cout << "A next j "<< A_next_j  << std::endl;
+                //std::cout << "s ==> : "<< s  << std::endl;
+                //std::cout << "residual ==> : "<< residual  << std::endl;
+                //std::cout << "mSearch ==> : "<< s  << std::endl;
+                //std::cout << "z ==> : "<< z  << std::endl;
+                //std::cout << "p ==> : "<< p  << std::endl;
+                //std::cout << "Precon i "<< Precon  << std::endl;
+
+
+                for( int i = 0; i < w; i = i + 1 ) {
+                   for( int j = 0; j < h; j = j + 1 ) {
+
+                       T Intermediate = flags[batch][0][0][j][i];
+                       float flag_val = Intermediate.item().to<float>();
+                       bool isfluid = (flag_val < 2.0);
+
+                       if (isfluid) {
+
+                           W[batch][0][0][j][i] = (A_diag[batch][0][0][j][i]*s[batch][0][0][j][i]) + 
+                                    (A_next_i[batch][0][0][j][i-1]*s[batch][0][0][j][i-1]) +(A_next_i[batch][0][0][j][i]*s[batch][0][0][j][i+1])+
+                                    (A_next_j[batch][0][0][j-1][i]*s[batch][0][0][j-1][i]) + (A_next_j[batch][0][0][j][i]*s[batch][0][0][j+1][i]);
+
+                           //std::cout << "W "<< i << "j " << j << ": "<< W[0][0][0][j][i]  << std::endl;
+                           //std::cout << "Sum i "<< i << "j " << j << ": "<< (A_diag[batch][0][0][j][i]*S_diag).sum() << std::endl;
+                           //std::cout << "S diag i "<< i << "j " << j << ": "<< S_diag[0][0][0][j][i]  << std::endl;
+                           //std::cout << "S_minus_i i "<< i << "j " << j << ": "<< S_minus_i[0][0][0][j][i]  << std::endl;
+                           //std::cout << "S_minus_j i "<< i << "j " << j << ": "<< S_minus_j[0][0][0][j][i]  << std::endl;                         
+ 
+                        }
+                    }
+                }
+
+                //T W = A_diag*s + A_next_i*S_minus_i + A_next_i*S_plus_i + A_next_j*S_minus_j + A_next_j*S_plus_j; //!!!!!Implement
+
+                //T PP = A_diag*p + A_next_i*P_minus_i + A_next_i*P_plus_i + A_next_j*P_minus_j + A_next_j*P_plus_j; //!!!!!Implement
+                //T Nul = residual - (div/dt -PP);
+                //T Nul_max = Nul.max();
+
+                //std::cout << "it should be 0: " << Nul_max.item().to<float>() << " Max Tol "<<  p_tol << std::endl;
+                //std::cout << "Nul SUM:  " << (Nul.sum()).item().to<float>() << std::endl;
+                //std::cout << "RESIDUAL SUM:  " << (residual.sum()).item().to<float>() << std::endl;
+                //std::cout << "DIV-PP SUM:  " << ((div/dt-PP).sum()).item().to<float>() << std::endl;
+                //std::cout << "Div SUM:  " << (div.sum()).item().to<float>() << std::endl;
+                //std::cout << "PP SUM:  " << (PP.sum()).item().to<float>() << std::endl;
+
+                //std::cout << "mTmp ==> : "<< W  << std::endl;
+
+                //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //const float alpha = 1;
+
+                // Same process as before, we calculate an intermediate sigma = W*r
+
+
+                //T Transposed_W = W.clone();
+
+                //for( int i = 0; i < w; i = i + 1 ) {
+                //   for( int j = 0; j < h; j = j + 1 ) {
+                //      Transposed_W[0][0][0][i][j] = W[0][0][0][j][i];
+                //   }
+                //}
+
+                //std::cout << "z After A ==> : "<< z  << std::endl;
+
+                T Inter_Sigma_mono = (s*W).sum();
+                float Inter_Sigma = Inter_Sigma_mono.item().to<float>();
+
+                std::cout << "Sigma " << Sigma  << std::endl;
+                std::cout << "Inter Sigma " << Inter_Sigma  << std::endl;
+
+                float alpha=0;
+
+                if (abs(Inter_Sigma) > 0.0001) {
+                   alpha = Sigma / Inter_Sigma;
+                }
+
+
+                //std::cout << "s ==> : "<< s  << std::endl;
+                //std::cout << "W*s ==> : " << s * W  << std::endl;
+
+                std::cout << "ALPHA                                 " << alpha  << std::endl;
+
+                p = p + alpha*s;
+
+                //std::cout << "P After Correction ==> : "<< p  << std::endl;
+
+                
+                T mean_p_mono = p.sum();
+                float mean_p = (mean_p_mono/mean_grid_mono).item().to<float>();
+                p = p - mean_p;
+                p.masked_fill_(mCont.ne(1),0);   
+ 
+                //std::cout << "Residual Before : --------------------------------------> " << residual << std::endl;
+
+                residual = residual - alpha*W;
+
+
+                //std::cout << "Mean P ==> : "<< mean_p  << std::endl;
+                //std::cout << "P After Mean Correction ==> : "<< p  << std::endl;
+                //std::cout << "Residual After Correction ==> : "<< residual  << std::endl;
+                       
+
+                //std::cout << "Residual After : --------------------------------------> " << residual << std::endl;
+
+                std::cout << "Residual Max: ------------------------> " << (abs(residual).max()).item().to<float>()  << std::endl;
+                std::cout << "Residual 2 Sum: ----------------------> " << ((residual*residual).sum()).item().to<float>()  << std::endl;
+
+                residual_max = (abs(residual)).max();
+                //std::cout << "Residual: " << residual_max.item().to<float>() << " Max Tol "<<  p_tol << std::endl;
+                                //
+                if (residual_max.item().to<float>() < p_tol) {
+                   if (verbose) {
+                          std::cout << "The residual is already small enough, P = 0" << std::endl;
+                           }
+                    break;
+                }
+
+                //Debug Printing
+                     
+                //std::cout << "Debug 17" << std::endl;
+
+                std::cout << "Iter: " << iter << " Max Tol "<<  p_tol << std::endl;
+
+                if (verbose) {
+                    std::cout << "PCG iteration " << (iter + 1) << ": residual "
+                    << residual << std::endl;
+                }
+           
+            
+                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //Algorithm !!!!!!!!!!!!!!!!!!!
+                //z = dot product M * residual //!!!!!Implement
+                // Once we have calculated the preconditioner, we should now solve z = Mr
+            
+                //z = Precon_Z(flags, div, residual, Precon, A_next_i, A_next_j);
+                //z = residual.clone();         
+ 
+                //std::cout << "z equal to  new residual ==> : "<< z  << std::endl;
+                //std::cout << "new residual ==> : "<< residual  << std::endl;
+                //for( int i = 0; i < w; i = i + 1 ) {
+                //   for( int j = 0; j < h; j = j + 1 ) {
+                //      Transposed_Z[0][0][0][i][j] = W[0][0][0][j][i];
+                //   }
+                //}
+
+                //std::cout << "Z At the end ==> : "<< z  << std::endl;
+
+                // We redo a new sigma = z*r
+                T New_Sigma_mono = (residual*residual).sum();
+                float New_Sigma = New_Sigma_mono.item().to<float>();
+      
+                float beta=0;
+
+                if (abs(alpha) > 0.0001) {
+                   beta = New_Sigma / Sigma;
+                } 
+                beta = New_Sigma / Sigma;
+
+                std::cout << "beta Sigma " << Sigma  << std::endl;
+                std::cout << "beta New_Sigma " << New_Sigma  << std::endl;
+                std::cout << "BETA                            " << beta  << std::endl;
+
+                s = residual + beta*s;
+                Sigma = New_Sigma;
+            
+
+                //std::cout << "s After Correction ==> : "<< s  << std::endl;
+
+                //Debug Printing
+                        
+                //std::cout << "Debug 18" << std::endl;
+
+                iter++;
+                if (iter >= max_iter) {
+                    if (verbose) {
+                        std::cout << "PCG  max iteration count (" << max_iter
+                        << ") reached (terminating)" << std::endl;
+                    }
+                    break;
+                }
+            } // end while
+            return {p, residual};
+
+    } // end boucle batch
+
+}//end declaration PCG
+    
+    
 } // namespace fluid
+    
+    
+    
+template<class InputIt1, class InputIt2, class T>
+T inner_product(InputIt1 first1, InputIt1 last1,
+                    InputIt2 first2, T init)
+{
+        while (first1 != last1) {
+            init = std::move(init) + *first1 * *first2; // std::move since C++20
+            ++first1;
+            ++first2;
+        }
+        return init;
+}
+    
+    
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("advect_scalar", &(fluid::advectScalar), "Advect Scalar");
     m.def("advect_vel", &(fluid::advectVel), "Advect Velocity");
-    m.def("solve_linear_system", &(fluid::solveLinearSystemJacobi), "Solve Linear System using Jacobi's method");
-
+    m.def("solve_linear_system_Jacobi", &(fluid::solveLinearSystemJacobi), "Solve Linear System using Jacobi's method");
+    m.def("solve_linear_system_PCG", &(fluid::solveLinearSystemPCG), "Solve Linear System using PCG method");
 }

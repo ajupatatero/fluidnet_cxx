@@ -23,6 +23,8 @@ import pyevtk.hl as vtk
 from shutil import copyfile
 import importlib.util
 
+from timeit import default_timer
+
 import lib
 import lib.fluid as fluid
 
@@ -254,14 +256,23 @@ try:
 
         #Time Vec Declaration
         Time_vec = np.zeros(max_iter)
+        time_big = np.zeros(max_iter)
+        Jacobi_switch = np.zeros(max_iter)
+        Max_Div = np.zeros(max_iter)
+        Max_Div_All = np.zeros(max_iter)
 
         # Main loop
         while (it < max_iter):
-            if it < 100:
-                method = 'jacobi'
-            else:
-                method = mconf['simMethod']
-            lib.simulate(mconf, batch_dict, net, method, Time_vec, folder, it)
+            #if it < 2:
+            #    method = 'jacobi'
+            #else:
+            #    method = mconf['simMethod']
+            method = mconf['simMethod']
+            start_big = default_timer()
+            lib.simulate(mconf, batch_dict, net, method, Time_vec, Jacobi_switch, Max_Div, Max_Div_All, folder, it)
+            end_big = default_timer()
+            time_big[it] = (end_big - start_big)
+
             #lib.simulate(mconf, batch_dict, net, method, it)
             if (it% outIter == 0):
                 print("It = " + str(it))
@@ -299,6 +310,23 @@ try:
 
                 filename5 = folder + '/Div_output_{0:05}'.format(it)
                 np.save(filename5,div[minY:maxY,minX:maxX])
+
+                print('Simulation Time', time_big[it])
+
+                filename6 = folder + '/Time_big'
+                np.save(filename6,time_big)
+
+                filename7 = folder + '/Jacobi_switch'
+                np.save(filename7,Jacobi_switch)
+
+                filename8 = folder + '/Max_Div'
+                np.save(filename8,Max_Div)
+
+                filename9 = folder + '/Max_Div_All'
+                np.save(filename9,Max_Div_All)
+
+                filename10 = folder + '/Time_vec'
+                np.save(filename10,Time_vec)
 
                 if real_time:
                     cax_rho.clear()

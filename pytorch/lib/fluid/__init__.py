@@ -12,4 +12,4 @@ from .util import emptyDomain
 from .init_conditions import createPlumeBCs, createRayleighTaylorBCs
 from .cpp.advection import correctScalar, advectScalar, advectVelocity
 from .cpp.solve_linear_sys import solveLinearSystemJacobi
-
+from .cpp.solve_linear_sys import solveLinearSystemPCG
