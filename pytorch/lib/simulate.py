@@ -32,7 +32,7 @@ def setConstVals(batch_dict, p, U, flags, density):
         batch_dict['density'] = density.clone()
 
 #def simulate(mconf, batch_dict, net, sim_method, output_div=False):
-def simulate(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_div=False):
+def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Div, Max_Div_All, folder, it, output_div=False):
     r"""Top level simulation loop.
 
     Arguments:
@@ -175,7 +175,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_di
     #Print Before U
     #Uinxb = U.clone()
     #Ubef_cpu = Uinxb.cpu()
-    #filename_1 = folder + '/U1_NN_Bef_update{0:05}'.format(it)
+    #filename_1 = folder + '/U_field/U1_Ja_Bef_update{0:05}'.format(it)
     #np.save(filename_1,Ubef_cpu)
 
     if (sim_method == 'convnet'):
@@ -196,6 +196,13 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_di
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
 
+
+        #Print Before U
+        #DUinxb = div.clone()
+        #DUbef_cpu = DUinxb.cpu()
+        #filename_3 = folder + '/U_field/Div_Ja_Bef_update{0:05}'.format(it)
+        #np.save(filename_3,DUbef_cpu)
+
         #TIMING TEST!!!!!
 
         start = default_timer()
@@ -206,7 +213,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_di
 
         end = default_timer()
         time=(end - start)
-        print("time", time)
+        print("time ", time, "it ", it )
 
         #Print Pressures
         #P_cpu = p.cpu()       
@@ -215,21 +222,81 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_di
 
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)
 
-        #Print After U
-        #Ua_cpu = U.cpu()
-        #filename_2 = folder + '/U1_NN_After_update{0:05}'.format(it)
-        #np.save(filename_2,Ua_cpu)
-        
-
     elif (sim_method == 'PCG'):
         div = fluid.velocityDivergence(U, flags)
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
+        maxIter_PCG = 50 
+        pTol_PCG = 2.5e-4  
+
+        #Timing Test
+        start = default_timer()
+        div_one = torch.zeros(5,5).float()
+        flags_one = torch.ones(5,5).float()
+        flags_one *= 2
+
+
+
+
+        #Debug
+        print(" ========================================================================")
+        #print( "U to solve ", U)
+        print(" ========================================================================")
+
+
+        """
+        div_one = (((div_one.unsqueeze(0)).unsqueeze(0)).unsqueeze(0))
+        flags_one = (((flags_one.unsqueeze(0)).unsqueeze(0)).unsqueeze(0))
+
+        zer = flags_one.unsqueeze(0)
+
+        for i in range(0,3):
+            
+            for j in range(0,3):
+                flags_one[0][0][0][i+1][j+1]=  flags_one[0][0][0][i+1][j+1] -1
+
+        div_one[0][0][0][1][1] = 0.1
+        div_one[0][0][0][1][2] = 0.1
+        div_one[0][0][0][1][3] = 0.1
+        div_one[0][0][0][2][1] = 0.
+        div_one[0][0][0][2][2] = 0.
+        div_one[0][0][0][2][3] = 0.
+        div_one[0][0][0][3][1] = 0.
+        div_one[0][0][0][3][2] = 0.
+        div_one[0][0][0][3][3] = 0.
+
+        # Clone U
+        U_only = torch.zeros(5,5).float()
+        U_only = (((U_only.unsqueeze(0)).unsqueeze(0)))
+        U_only2 = U_only.clone()
+
+        U_only[0][0][1][1] = 0.
+        U_only[0][0][1][2] = 0.
+        U_only[0][0][1][3] = 0.
+        U_only[0][0][2][1] = 1.2
+        U_only[0][0][2][2] = 1.2
+        U_only[0][0][2][3] = 1.2
+        U_only[0][0][3][1] = 1.2
+        U_only[0][0][3][2] = 1.2
+        U_only[0][0][3][3] = 1.2
+
+        U_only3 = torch.stack((U_only2,U_only), dim=1)
+
+        print("U only 3 shape ", U_only3.shape)
+
+        print("U only ", U_only)
+        div_new = fluid.velocityDivergence(U_only3, flags_one)
+        """
 
         p, residual = fluid.solveLinearSystemPCG( \
-                flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
-                max_iter=maxIter)
+                flags=flags, div=div, is_3d=is3D, p_tol=pTol_PCG, \
+                max_iter=maxIter_PCG)
+
+        end = default_timer()
+        time=(end - start)
+        print("time", time)
+
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)
 
     if sim_method != 'convnet':
@@ -244,12 +311,57 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_di
     elif stick:
         fluid.setWallBcsStick(U, flags, flags_stick)
 
+    
+    div_after  = fluid.velocityDivergence(U, flags)
+
     #Time Vec Saving
     Time_vec[it] = time
     filename = folder + '/Time'
     np.save(filename, Time_vec)
 
     setConstVals(batch_dict, p, U, flags, density)
+
+    Threshold = 8.e-4
+    div_after  = fluid.velocityDivergence(U, flags)
+
+    Max_Div[it] = (abs(div_after).max()).item()
+
+    print(" Div Max: ===> ", Max_Div[it])
+
+    """ 
+    if abs(div_after).max() > Threshold:
+ 
+        print( " Treshold surpassed ========> ")
+        
+        Jacobi_switch[it]=1
+        div = fluid.velocityDivergence(U, flags)
+        is3D = (U.size(2) > 1)
+        pTol = mconf['pTol']
+        maxIter = mconf['jacobiIter']
+
+        p, residual = fluid.solveLinearSystemJacobi( \
+                flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
+                max_iter=maxIter)
+
+        fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+
+        if 'periodic-x' in mconf and 'periodic-y' in mconf:
+            U_temp = U.clone()
+        U = fluid.setWallBcs(U, flags)
+        if 'periodic-x' in mconf and 'periodic-y' in mconf:
+            if mconf['periodic-x']:
+                U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
+            if mconf['periodic-y']:
+                 U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
+        if stick:
+           fluid.setWallBcsStick(U, flags, flags_stick)   
+
+        setConstVals(batch_dict, p, U, flags, density)
+    
+    """
+    div_final  = fluid.velocityDivergence(U, flags)
+    Max_Div_All[it] = (abs(div_final).max()).item()
+
     batch_dict['U'] = U
     batch_dict['density'] = density
     batch_dict['p'] = p
