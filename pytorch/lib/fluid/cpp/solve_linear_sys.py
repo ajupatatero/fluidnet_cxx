@@ -40,7 +40,7 @@ def solveLinearSystemJacobi(flags, div, is_3d=False, p_tol=1e-5, max_iter=1000, 
     return p, p_tol
 
 
-def solveLinearSystemPCG(flags, div, is_3d=False, p_tol=1e-5, max_iter=1000, verbose=False):
+def solveLinearSystemPCG(flags, div, inflow,is_3d=False, p_tol=1e-5, max_iter=1000, verbose=False):
     r"""Solves the linear system using the Jacobi method.
         Note: Since we don't receive a velocity field, we need to receive the is3D
         flag from the caller.
@@ -73,7 +73,7 @@ def solveLinearSystemPCG(flags, div, is_3d=False, p_tol=1e-5, max_iter=1000, ver
 
     assert flags.is_contiguous() and div.is_contiguous(), "Input is not contiguous"
 
-    p, p_tol = fluidnet_cpp.solve_linear_system_PCG(flags, div, is_3d, \
+    p, p_tol = fluidnet_cpp.solve_linear_system_PCG(flags, div, inflow, is_3d, \
             p_tol, max_iter, verbose)
 
     return p, p_tol

@@ -1105,6 +1105,7 @@ std::vector<T> solveLinearSystemPCG
 (
      T flags,
      T div,
+     T inflow,
      const bool is3D,
      const float p_tol = 1e-5,
      const int max_iter = 1000,
@@ -1136,12 +1137,16 @@ std::vector<T> solveLinearSystemPCG
         T A_up = ones_like(flags);
         T A_front = ones_like(flags);
 
+        T A_inflow = zeros_like(flags);
+
         T A_fluid = zeros_like(flags);
       
         T A_next_i = zeros_like(flags);
         T A_next_j = zeros_like(flags);
         T A_next_k = zeros_like(flags);
         
+
+
         // Constant initializing
         
         const int32_t bnd =1;
@@ -1316,6 +1321,9 @@ std::vector<T> solveLinearSystemPCG
         A_up.masked_fill_(fluid_flag.ne(1), 0);
         A_front.masked_fill_(fluid_flag.ne(1), 0);
 
+
+        A_inflow.masked_fill_(inflow>0.01, 1);
+
         //Debug Printing
         //std::cout << "Debug 5.55" << std::endl;
 
@@ -1326,7 +1334,7 @@ std::vector<T> solveLinearSystemPCG
 
         //Watch the A_diagonal structure
         //A_diag = A_fluid+A_left+A_bot+A_back;
-        A_diag = A_left+A_bot+A_back+A_right+A_up+A_front;
+        A_diag = A_left+A_bot+A_back+A_right+A_up+A_front+A_inflow;
         //A_diag = A_diag * dt;
  
         //Debug Printing
@@ -1669,9 +1677,9 @@ std::vector<T> solveLinearSystemPCG
 ////////// TODOOOOO THINK HOW TO ONLY MULTIPLY THE DIAGONAL TERMS OF S	
               
 
-                //std::cout << "Adiag i "<< A_diag  << std::endl;
-                //std::cout << "A next i "<< A_next_i  << std::endl;
-                //std::cout << "A next j "<< A_next_j  << std::endl;
+                std::cout << "Adiag i "<< A_diag  << std::endl;
+                std::cout << "A next i "<< A_next_i  << std::endl;
+                std::cout << "A next j "<< A_next_j  << std::endl;
                 //std::cout << "s ==> : "<< s  << std::endl;
                 //std::cout << "residual ==> : "<< residual  << std::endl;
                 //std::cout << "mSearch ==> : "<< s  << std::endl;
