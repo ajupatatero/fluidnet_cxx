@@ -18,9 +18,8 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-#outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Result_plume_Corrected/No_Cylinder/Ri_0_14/Ja200/"
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Debug_PCG/Test_03_06/Big"
-#outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Debug_PCG/Jacobi_Study"
+#outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Tresh_Mix/Cyl_Test_09_06_Jacobi_1_DoubleT"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Debug_PCG/Test_10_06/First"
 # simMethod: choose convnet or jacobi or PCG
 simMethod: "PCG"
 # modelDir : location of trained model
@@ -32,9 +31,9 @@ modelFilename: "convModel"
 dt: 5
 #dt: 3
 # statIter : iterations frequency for output
-statIter: 1
+statIter: 10
 # maxIter : maximum number of simulation iterations
-maxIter: 200
+maxIter: 2000
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -66,7 +65,7 @@ operatingDensity: 0.0
 # pTol : convergence criterion for Jacobi method
 pTol: 0.00
 # jacobiIter : maximum number of iterations for Jacobi method
-jacobiIter: 200
+jacobiIter: 1
 # gravityVec : orientation of the gravity vector when buoyancy/gravity 
 # are present.
 gravityVec:

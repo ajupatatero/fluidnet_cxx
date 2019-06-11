@@ -194,8 +194,13 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
         div = fluid.velocityDivergence(U, flags)
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
+        load_file = folder + '/Jacobi_switch_loading.npy'
+        #Maxi_Try = np.load(load_file)
         maxIter = mconf['jacobiIter']
-
+        #if it < 20:
+        #   maxIter = np.int(Maxi_Try[it]*10)
+        #else:
+        #   maxIter = np.int(Maxi_Try[it])
 
         #Print Before U
         #DUinxb = div.clone()
@@ -236,8 +241,14 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
         flags_one = torch.ones(5,5).float()
         flags_one *= 2
 
-
-
+        # Inflow 
+        inflow = torch.zeros_like(flags)
+        inflow_border = torch.zeros_like(flags)
+        inflow = ((batch_dict['UBC'][:,1,:,:,:]).unsqueeze(1))>0.0001
+        inflow_border[0,0,0,0,:]= inflow[0,0,0,1,:]
+        print("Inflow ", inflow.shape)
+        print("Inflow Look ", inflow)
+        print("Inflow Border ", inflow_border)
 
         #Debug
         print(" ========================================================================")
@@ -290,7 +301,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
         """
 
         p, residual = fluid.solveLinearSystemPCG( \
-                flags=flags, div=div, is_3d=is3D, p_tol=pTol_PCG, \
+                flags=flags, div=div, inflow = inflow_border:q, is_3d=is3D, p_tol=pTol_PCG, \
                 max_iter=maxIter_PCG)
 
         end = default_timer()
@@ -321,43 +332,62 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
 
     setConstVals(batch_dict, p, U, flags, density)
 
-    Threshold = 8.e-4
+
+    if it < 200:
+       Threshold = 3.e-4
+    else:
+       Threshold = 8.e-4
+    #Threshold = 8.e-4
+
     div_after  = fluid.velocityDivergence(U, flags)
 
     Max_Div[it] = (abs(div_after).max()).item()
 
     print(" Div Max: ===> ", Max_Div[it])
 
+    
     """ 
     if abs(div_after).max() > Threshold:
  
         print( " Treshold surpassed ========> ")
         
-        Jacobi_switch[it]=1
-        div = fluid.velocityDivergence(U, flags)
-        is3D = (U.size(2) > 1)
-        pTol = mconf['pTol']
-        maxIter = mconf['jacobiIter']
+        #Jacobi_switch[it]=1
+        Counter = 0
 
-        p, residual = fluid.solveLinearSystemJacobi( \
-                flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
-                max_iter=maxIter)
+        while abs(div_after).max() > Threshold:
 
-        fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+            Jacobi_switch[it]+=1
 
-        if 'periodic-x' in mconf and 'periodic-y' in mconf:
-            U_temp = U.clone()
-        U = fluid.setWallBcs(U, flags)
-        if 'periodic-x' in mconf and 'periodic-y' in mconf:
-            if mconf['periodic-x']:
-                U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
-            if mconf['periodic-y']:
-                 U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
-        if stick:
-           fluid.setWallBcsStick(U, flags, flags_stick)   
+            div = fluid.velocityDivergence(U, flags)
+            is3D = (U.size(2) > 1)
+            pTol = mconf['pTol']
+            maxIter = 1
 
-        setConstVals(batch_dict, p, U, flags, density)
+            p, residual = fluid.solveLinearSystemJacobi( \
+                    flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
+                    max_iter=maxIter)
+
+            fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+
+            if 'periodic-x' in mconf and 'periodic-y' in mconf:
+                U_temp = U.clone()
+            U = fluid.setWallBcs(U, flags)
+            if 'periodic-x' in mconf and 'periodic-y' in mconf:
+                if mconf['periodic-x']:
+                    U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
+                if mconf['periodic-y']:
+                    U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
+            if stick:
+                fluid.setWallBcsStick(U, flags, flags_stick)   
+
+            setConstVals(batch_dict, p, U, flags, density)
     
+            Counter +=1
+            div_after  = fluid.velocityDivergence(U, flags)
+            
+            print("Counter :", Counter)
+            print("Div Max :", (abs(div_after).max()).item())
+            
     """
     div_final  = fluid.velocityDivergence(U, flags)
     Max_Div_All[it] = (abs(div_final).max()).item()

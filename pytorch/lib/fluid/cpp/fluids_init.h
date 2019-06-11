@@ -154,6 +154,7 @@ std::vector<T> solveLinearSystemPCG
 (
    T flags,
    T div,
+   T inflow,
    const bool is_3d,
    const float p_tol,
    const int max_iter,

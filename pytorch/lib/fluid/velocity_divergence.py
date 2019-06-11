@@ -58,6 +58,10 @@ def velocityDivergence(U, flags):
     # -div = u(i+1,j,k) - u(i,j,k) +
     #        v(i,j+1,k) - v(i,j,k) +
     #        w(i,j,k+1) - w(i,j,k)
+
+    #print("U ijk ", Uijk[0,1])
+    #print("U ijk_p ", Uijk_p[0,1])
+
     div = Uijk.select(1,0) - Uijk_p.select(1,0) + \
                      Uijk.select(1,1) - Uijk_p.select(1,1)
 
@@ -67,9 +71,15 @@ def velocityDivergence(U, flags):
         divergence[:,:,:,1:(h-1),1:(w-1)] = div.view(bsz, 1, d, h-2, w-2)
     else:
         divergence[:,:,1:(d-1),1:(h-1),1:(w-1)] = div.view(bsz, 1, d-2, h-2, w-2)
+ 
+    #print("Hello ") 
+    #print("U ", U[0,1]) 
+    #print("Previous DIv ", divergence)
 
     #Set div to 0 in obstacles
     mask_obst = flags.eq(CellType.TypeObstacle)
     divergence.masked_fill_(mask_obst, 0)
+
+    #print("Corrected Divergence: ", divergence)
     return divergence
 
