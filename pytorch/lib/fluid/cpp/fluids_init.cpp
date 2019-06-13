@@ -1677,9 +1677,9 @@ std::vector<T> solveLinearSystemPCG
 ////////// TODOOOOO THINK HOW TO ONLY MULTIPLY THE DIAGONAL TERMS OF S	
               
 
-                std::cout << "Adiag i "<< A_diag  << std::endl;
-                std::cout << "A next i "<< A_next_i  << std::endl;
-                std::cout << "A next j "<< A_next_j  << std::endl;
+                //std::cout << "Adiag i "<< A_diag  << std::endl;
+                //std::cout << "A next i "<< A_next_i  << std::endl;
+                //std::cout << "A next j "<< A_next_j  << std::endl;
                 //std::cout << "s ==> : "<< s  << std::endl;
                 //std::cout << "residual ==> : "<< residual  << std::endl;
                 //std::cout << "mSearch ==> : "<< s  << std::endl;
