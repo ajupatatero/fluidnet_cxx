@@ -229,11 +229,14 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
 
     elif (sim_method == 'PCG'):
         div = fluid.velocityDivergence(U, flags)
+        
+        Advected_Div = (abs(div).max()).item()
+
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
-        maxIter_PCG = 50 
-        pTol_PCG = 2.5e-4  
+        maxIter_PCG = 200 
+        pTol_PCG = 0.5e-4  
 
         #Timing Test
         start = default_timer()
@@ -245,14 +248,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
         inflow = torch.zeros_like(flags)
         inflow_border = torch.zeros_like(flags)
         inflow = ((batch_dict['UBC'][:,1,:,:,:]).unsqueeze(1))>0.0001
-        inflow_border[0,0,0,0,:]= inflow[0,0,0,1,:]
-        print("Inflow ", inflow.shape)
-        print("Inflow Look ", inflow)
-        print("Inflow Border ", inflow_border)
+        inflow_border[0,0,0,1,:]= inflow[0,0,0,1,:]
 
         #Debug
         print(" ========================================================================")
-        #print( "U to solve ", U)
+        print( "IT  ", it)
         print(" ========================================================================")
 
 
@@ -301,7 +301,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
         """
 
         p, residual = fluid.solveLinearSystemPCG( \
-                flags=flags, div=div, inflow = inflow_border:q, is_3d=is3D, p_tol=pTol_PCG, \
+                flags=flags, div=div, inflow = inflow_border, is_3d=is3D, p_tol=pTol_PCG, \
                 max_iter=maxIter_PCG)
 
         end = default_timer()
@@ -343,7 +343,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
 
     Max_Div[it] = (abs(div_after).max()).item()
 
-    print(" Div Max: ===> ", Max_Div[it])
+    print(" Div After Advection : ===============> ", Advected_Div)
+    print(" Div Max : ===========================> ", Max_Div[it])
 
     
     """ 
