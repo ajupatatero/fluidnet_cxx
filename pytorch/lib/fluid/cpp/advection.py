@@ -90,6 +90,7 @@ def advectVelocity(dt, orig, U, flags, method = 'maccormackFluidNet', boundary_w
     """
 
     #Check sizes
+
     assert U.dim() == 5 and orig.dim() == 5 and flags.dim() == 5, "Dimension mismatch"
     assert flags.size(1) == 1, "flags is not scalar"
 
@@ -97,6 +98,12 @@ def advectVelocity(dt, orig, U, flags, method = 'maccormackFluidNet', boundary_w
     d = flags.size(2)
     h = flags.size(3)
     w = flags.size(4)
+
+    
+    Open_mask = flags.eq(16)
+    Openboundary = (Open_mask.sum()>1)
+
+    print("Boundary ", Openboundary)
 
     is3D = U.size(1) == 3
     if (not is3D):
@@ -113,7 +120,7 @@ def advectVelocity(dt, orig, U, flags, method = 'maccormackFluidNet', boundary_w
     assert U.is_contiguous() and orig.is_contiguous() and flags.is_contiguous(), "Input is not contiguous"
 
     U_dst = fluidnet_cpp.advect_vel(dt, orig, U, flags, method,
-            boundary_width, maccormack_strength)
+            boundary_width, Openboundary,maccormack_strength)
 
     return U_dst
 

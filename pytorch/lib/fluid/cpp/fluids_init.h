@@ -111,6 +111,15 @@ T MacCormackClampMAC
   const T& i, const T& j, const T& k
 );
 
+
+T ApplyOutflow
+(
+  const T& flags, const T& vel,
+  const T& velPrev,
+  float dt,
+  int bWidth
+);
+
 // Advect velocity field 'u' by itself and store in uDst.
 //
 // @input dt - timestep (seconds).
@@ -128,6 +137,7 @@ T advectVel
   float dt, T orig, T U, T flags,
   const std::string method_str,
   int bnd,
+  bool Openbound,
   const float maccormack_strength
 );
     

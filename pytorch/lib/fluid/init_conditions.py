@@ -12,9 +12,9 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     """
 
     #Jet length (jl -a) 
-    jl = 15
+    jl = 4
     #Jet first cell point
-    a=10
+    a=1
     
     flags = batch_dict['flags']
     

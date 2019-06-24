@@ -2,7 +2,7 @@ import torch
 import lib.fluid as fluid
 import numpy as np
 from timeit import default_timer
-
+import pdb
 
 def setConstVals(batch_dict, p, U, flags, density):
     # apply external BCs.
@@ -32,7 +32,7 @@ def setConstVals(batch_dict, p, U, flags, density):
         batch_dict['density'] = density.clone()
 
 #def simulate(mconf, batch_dict, net, sim_method, output_div=False):
-def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Div, Max_Div_All, folder, it, output_div=False):
+def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_switch, Max_Div, Max_Div_All, folder, it, Threshold_Div, dt, Outside_Ja, output_div=False):
     r"""Top level simulation loop.
 
     Arguments:
@@ -52,8 +52,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
     cuda = torch.device('cuda')
     assert sim_method == 'convnet' or sim_method == 'jacobi' or sim_method == 'PCG', 'Simulation method \
                 not supported. Choose either convnet, PCG or jacobi.'
-
-    dt = float(mconf['dt'])
+    
+    #dt = arguments.setdt or float(mconf['dt'])
     maccormackStrength = mconf['maccormackStrength']
     sampleOutsideFluid = mconf['sampleOutsideFluid']
 
@@ -94,6 +94,56 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
     else:
         density = torch.zeros_like(flags)
 
+    #Debug Ekhi 13/06/19
+    """
+    U_only = torch.zeros_like(U)
+    U_only[0][0][0][1][1] = 0.1
+    U_only[0][0][0][1][2] = 0.1
+    U_only[0][0][0][1][3] = 0.1
+    U_only[0][0][0][2][1] = 0.1
+    U_only[0][0][0][2][2] = 0.1
+    U_only[0][0][0][2][3] = 0.1
+    U_only[0][0][0][3][1] = 0.1
+    U_only[0][0][0][3][2] = 0.1
+    U_only[0][0][0][3][3] = 0.1
+
+    U_only[0][1][0][1][1] = 1.
+    U_only[0][1][0][1][2] = 2.
+    U_only[0][1][0][1][3] = 3.
+    U_only[0][1][0][2][1] = 4.
+    U_only[0][1][0][2][2] = 5.
+    U_only[0][1][0][2][3] = 6.
+    U_only[0][1][0][3][1] = 7.
+    U_only[0][1][0][3][2] = 8.
+    U_only[0][1][0][3][3] = 9.
+    U_only[0][1][0][4][1] = 2.
+    U_only[0][1][0][4][2] = 2.
+    U_only[0][1][0][4][3] = 2.
+    """ 
+
+    flags_only= flags.clone()
+
+    #flags_only[0][0][0][1][0] = 16
+    #flags_only[0][0][0][2][0] = 16
+    #flags_only[0][0][0][3][0] = 16
+
+    #flags_only[0][0][0][0][1] = 16
+    #flags_only[0][0][0][0][2] = 16
+    #flags_only[0][0][0][0][3] = 16
+
+    #flags_only[0][0][0][4][1] = 16
+    #flags_only[0][0][0][4][2] = 16
+    #flags_only[0][0][0][4][3] = 16 
+
+    #flags_only[0][0][0][1][4] = 16
+    #flags_only[0][0][0][2][4] = 16
+    #flags_only[0][0][0][3][4] = 16
+
+    #U = U_only
+    #flags = flags_only
+
+    #print(" U ", U)
+
     if viscosity == 0:
         # Self-advect velocity if inviscid
         U = fluid.advectVelocity(dt=dt, orig=U, U=U, flags=flags, method="maccormackFluidNet", \
@@ -107,6 +157,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
     # Set the manual BCs.
     setConstVals(batch_dict, p, U, flags, density)
 
+    #pdb.set_trace() 
 
     #HERE, no matter the method, we should get the same velocity field in the it 50
     #Print After U
@@ -161,6 +212,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
 
     setConstVals(batch_dict, p, U, flags, density)
 
+
+    div = fluid.velocityDivergence(U, flags)
+    Advected_Div = (abs(div).max()).item()
+
     #Print Before U
     #Uinter_cpu = U.cpu()
     #filename_inter = folder + '/U1_NN_Intermediate{0:05}'.format(it)
@@ -177,6 +232,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
     #Ubef_cpu = Uinxb.cpu()
     #filename_1 = folder + '/U_field/U1_Ja_Bef_update{0:05}'.format(it)
     #np.save(filename_1,Ubef_cpu)
+
+
+    #Timing for the whole P solving
+    start_Pres = default_timer()
 
     if (sim_method == 'convnet'):
         # fprop the model to perform the pressure projection and velocity calculation.
@@ -228,10 +287,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)
 
     elif (sim_method == 'PCG'):
-        div = fluid.velocityDivergence(U, flags)
-        
-        Advected_Div = (abs(div).max()).item()
-
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
@@ -333,11 +388,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
     setConstVals(batch_dict, p, U, flags, density)
 
 
-    if it < 200:
-       Threshold = 3.e-4
-    else:
-       Threshold = 8.e-4
-    #Threshold = 8.e-4
+    #if it < 200:
+    #   Threshold = 3.e-4
+    #else:
+    #   Threshold = 8.e-4
+    Threshold = Threshold_Div
 
     div_after  = fluid.velocityDivergence(U, flags)
 
@@ -346,50 +401,57 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Jacobi_switch, Max_Di
     print(" Div After Advection : ===============> ", Advected_Div)
     print(" Div Max : ===========================> ", Max_Div[it])
 
-    
-    """ 
-    if abs(div_after).max() > Threshold:
- 
-        print( " Treshold surpassed ========> ")
+    if ( Outside_Ja == True):
+
+        if abs(div_after).max() > Threshold:
+     
+            print( " Treshold surpassed ========> ")
+            
+            #Jacobi_switch[it]=1
+            Counter = 0
+
+            while abs(div_after).max() > Threshold:
+
+                Jacobi_switch[it]+=1
+
+                div = fluid.velocityDivergence(U, flags)
+                is3D = (U.size(2) > 1)
+                pTol = mconf['pTol']
+                maxIter = 1
+
+                p, residual = fluid.solveLinearSystemJacobi( \
+                        flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
+                        max_iter=maxIter)
+
+                fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+
+                if 'periodic-x' in mconf and 'periodic-y' in mconf:
+                    U_temp = U.clone()
+                U = fluid.setWallBcs(U, flags)
+                if 'periodic-x' in mconf and 'periodic-y' in mconf:
+                    if mconf['periodic-x']:
+                        U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
+                    if mconf['periodic-y']:
+                        U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
+                if stick:
+                    fluid.setWallBcsStick(U, flags, flags_stick)   
+
+                setConstVals(batch_dict, p, U, flags, density)
         
-        #Jacobi_switch[it]=1
-        Counter = 0
-
-        while abs(div_after).max() > Threshold:
-
-            Jacobi_switch[it]+=1
-
-            div = fluid.velocityDivergence(U, flags)
-            is3D = (U.size(2) > 1)
-            pTol = mconf['pTol']
-            maxIter = 1
-
-            p, residual = fluid.solveLinearSystemJacobi( \
-                    flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
-                    max_iter=maxIter)
-
-            fluid.velocityUpdate(pressure=p, U=U, flags=flags)
-
-            if 'periodic-x' in mconf and 'periodic-y' in mconf:
-                U_temp = U.clone()
-            U = fluid.setWallBcs(U, flags)
-            if 'periodic-x' in mconf and 'periodic-y' in mconf:
-                if mconf['periodic-x']:
-                    U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
-                if mconf['periodic-y']:
-                    U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
-            if stick:
-                fluid.setWallBcsStick(U, flags, flags_stick)   
-
-            setConstVals(batch_dict, p, U, flags, density)
+                Counter +=1
+                div_after  = fluid.velocityDivergence(U, flags)
+                
+                print("Counter :", Counter)
+                print("Div Max :", (abs(div_after).max()).item())
+                 
+        
     
-            Counter +=1
-            div_after  = fluid.velocityDivergence(U, flags)
-            
-            print("Counter :", Counter)
-            print("Div Max :", (abs(div_after).max()).item())
-            
-    """
+    end_Pres = default_timer()
+    time_Pressure=(end_Pres - start_Pres)
+    print("time Pressure ", time_Pressure)
+
+    Time_Pres[it] = time_Pressure
+
     div_final  = fluid.velocityDivergence(U, flags)
     Max_Div_All[it] = (abs(div_final).max()).item()
 
