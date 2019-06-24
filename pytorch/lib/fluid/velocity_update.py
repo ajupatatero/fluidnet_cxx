@@ -212,17 +212,26 @@ def velocityUpdate(pressure, U, flags):
         # Current cell is inflow
         mask_inflow = flags.narrow(4, 1, w-2).narrow(3, 1, h-2).eq(CellType.TypeInflow)
 
+        # Current cell is outflow
+        mask_outflow = flags.narrow(4, 1, w-2).narrow(3, 1, h-2).eq(CellType.TypeOutflow)
+
         # Current is fluid and neighbour to left or down are fluid
         mask_fluid_i = mask_fluid.__and__ \
             (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeFluid))
         mask_fluid_j = mask_fluid.__and__ \
             (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeFluid))
 
-        # Current is fluid and neighbour to left or down are fluid
+        # Current is inflow and neighbour to left or down are inflow
         mask_inflow_i = mask_inflow.__and__ \
             (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeInflow))
         mask_inflow_j = mask_inflow.__and__ \
             (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeInflow))
+
+        # Current is inflow and neighbour to left or down are inflow
+        mask_outflow_i = mask_outflow.__and__ \
+            (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeOutflow))
+        mask_outflow_j = mask_outflow.__and__ \
+            (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeOutflow))
 
         # Current cell is fluid and neighbours to left or down are obstacle
         mask_fluid_obstacle_im1 = mask_fluid.__and__ \
@@ -242,11 +251,19 @@ def velocityUpdate(pressure, U, flags):
         mask_fluid_inflow_jm1 = mask_fluid.__and__ \
             (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeInflow))
 
+        # Current cell is fluid and neighbours to left or down are Outflows
+        mask_fluid_outflow_im1 = mask_fluid.__and__ \
+            (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeOutflow))
+        mask_fluid_outflow_jm1 = mask_fluid.__and__ \
+            (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeOutflow))
+
+
         # Current cell is obstacle and not outflow
         mask_obstacle = flags.narrow(4, 1, w-2).narrow(3, 1, h-2) \
                             .eq(CellType.TypeEmpty).__and__ \
                      (flags.narrow(4, 1, w-2).narrow(3, 1, h-2) \
                             .ne(CellType.TypeOutflow))
+
         # Current cell is obstacle and neighbours to left or down are fluid
         mask_obstacle_fluid_im1 = mask_obstacle.__and__ \
             (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeFluid))
@@ -265,11 +282,30 @@ def velocityUpdate(pressure, U, flags):
         mask_inflow_fluid_jm1 = mask_inflow.__and__ \
             (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeFluid))
 
+        # Current cell is outflow and neighbours to left or down are fluid
+        mask_outflow_fluid_im1 = mask_outflow.__and__ \
+            (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeFluid))
+        mask_outflow_fluid_jm1 = mask_outflow.__and__ \
+            (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeFluid))
+
+
+        # Current cell is outflow and neighbours to left or down are obstacle
+        mask_outflow_obstacle_im1 = mask_outflow.__and__ \
+            (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeEmpty))
+        mask_outflow_obstacle_jm1 = mask_outflow.__and__ \
+            (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeEmpty))
+
         # Current cell is obstacle and neighbours to left or down are not fluid
         mask_no_fluid_im1 = mask_obstacle.__and__ \
             (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).eq(CellType.TypeEmpty))
         mask_no_fluid_jm1 = mask_obstacle.__and__ \
             (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).eq(CellType.TypeEmpty))
+
+        # Current cell is outflow and neighbours to left or down are not fluid
+        mask_outflow_no_fluid_im1 = mask_outflow.__and__ \
+            (flags.narrow(4, 0, w-2).narrow(3, 1, h-2).ne(CellType.TypeFluid))
+        mask_outflow_no_fluid_jm1 = mask_outflow.__and__ \
+            (flags.narrow(4, 1, w-2).narrow(3, 0, h-2).ne(CellType.TypeFluid))
 
     else:
         # TODO: implement 3D bcs well.
@@ -289,17 +325,26 @@ def velocityUpdate(pressure, U, flags):
     mask_inflow_i_f = mask_inflow_i.type(U.type())
     mask_inflow_j_f = mask_inflow_j.type(U.type())
 
+    mask_outflow_i_f = mask_outflow_i.type(U.type())
+    mask_outflow_j_f = mask_outflow_j.type(U.type())
+
     mask_fluid_obstacle_i_f = mask_fluid_obstacle_im1.type(U.type())
     mask_fluid_obstacle_j_f = mask_fluid_obstacle_jm1.type(U.type())
 
     mask_fluid_inflow_im1 = mask_fluid_inflow_im1.type(U.type())
     mask_fluid_inflow_jm1 = mask_fluid_inflow_jm1.type(U.type())
 
+    mask_fluid_outflow_im1 = mask_fluid_outflow_im1.type(U.type())
+    mask_fluid_outflow_jm1 = mask_fluid_outflow_jm1.type(U.type())
+
     mask_inflow_fluid_im1 = mask_inflow_fluid_im1.type(U.type())
     mask_inflow_fluid_jm1 = mask_inflow_fluid_jm1.type(U.type())
 
     mask_inflow_obstacle_im1 = mask_inflow_obstacle_im1.type(U.type())
     mask_inflow_obstacle_jm1 = mask_inflow_obstacle_jm1.type(U.type())
+
+    mask_outflow_fluid_im1 = mask_outflow_fluid_im1.type(U.type())
+    mask_outflow_fluid_jm1 = mask_outflow_fluid_jm1.type(U.type())
 
     mask_obstacle_fluid_i_f = mask_obstacle_fluid_im1.type(U.type())
     mask_obstacle_fluid_j_f = mask_obstacle_fluid_jm1.type(U.type())
@@ -318,11 +363,14 @@ def velocityUpdate(pressure, U, flags):
     if not is3D:
         mask_fluid = torch.cat((mask_fluid_i_f, mask_fluid_j_f), 1).contiguous()
         mask_inflow = torch.cat((mask_inflow_i_f, mask_inflow_j_f), 1).contiguous()
+        mask_outflow = torch.cat((mask_outflow_i_f, mask_outflow_j_f), 1).contiguous()
         mask_fluid_obstacle = torch.cat((mask_fluid_obstacle_i_f, mask_fluid_obstacle_j_f), 1).contiguous()
         mask_fluid_inflow = torch.cat((mask_fluid_inflow_im1, mask_fluid_inflow_jm1), 1).contiguous()
+        mask_fluid_outflow = torch.cat((mask_fluid_outflow_im1, mask_fluid_outflow_jm1), 1).contiguous()
         mask_obstacle_fluid = torch.cat((mask_obstacle_fluid_i_f, mask_obstacle_fluid_j_f), 1).contiguous()
         mask_obstacle_inflow = torch.cat((mask_obstacle_inflow_i_f, mask_obstacle_inflow_j_f), 1).contiguous()        
         mask_inflow_fluid = torch.cat((mask_inflow_fluid_im1, mask_inflow_fluid_jm1), 1).contiguous()
+        mask_outflow_fluid = torch.cat((mask_outflow_fluid_im1, mask_outflow_fluid_jm1), 1).contiguous()
         mask_inflow_obstacle = torch.cat((mask_inflow_obstacle_im1, mask_inflow_obstacle_jm1), 1).contiguous()
         mask_no_fluid = torch.cat((mask_no_fluid_i_f, mask_no_fluid_j_f), 1).contiguous()
     else:
@@ -367,7 +415,33 @@ def velocityUpdate(pressure, U, flags):
         # u = u - p(i,j)
         # 3) Cell is obstacle and left neighbour is fluid
         # u = u + p(i-1,j)
-        
+
+
+        """
+        U[:,:,:,1:(h-1),1:(w-1)] = (mask_fluid * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+            mask_fluid_outflow * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - Pijk) + \
+            mask_fluid_obstacle * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - Pijk) + \
+            mask_obstacle_fluid * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) + Pijk_m) + \
+            mask_outflow_fluid * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) + Pijk_m) + \
+            mask_inflow * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) +            
+            mask_fluid_inflow * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+            mask_inflow_fluid * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+            mask_obstacle_inflow * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+            mask_inflow_obstacle * \
+            (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
+            mask_no_fluid * (0))
+        """
+
+                
         U[:,:,:,1:(h-1),1:(w-1)] = (mask_fluid * \
             (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
             mask_fluid_obstacle * \
@@ -385,6 +459,8 @@ def velocityUpdate(pressure, U, flags):
             mask_inflow_obstacle * \
             (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \
             mask_no_fluid * (0))
+        
+
         #print("flags After Adding 7", flags[0,0,0,0:5,30:64])
         #U[:,:,:,1:(h-1),1:(w-1)] = (mask_fluid * \
         #    (U.narrow(4, 1, w-2).narrow(3, 1, h-2) - (Pijk - Pijk_m)) + \

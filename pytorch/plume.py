@@ -256,6 +256,7 @@ try:
 
         #Time Vec Declaration
         Time_vec = np.zeros(max_iter)
+        Time_Pres = np.zeros(max_iter)
         time_big = np.zeros(max_iter)
         Jacobi_switch = np.zeros(max_iter)
         Max_Div = np.zeros(max_iter)
@@ -269,7 +270,7 @@ try:
             #    method = mconf['simMethod']
             method = mconf['simMethod']
             start_big = default_timer()
-            lib.simulate(mconf, batch_dict, net, method, Time_vec, Jacobi_switch, Max_Div, Max_Div_All, folder, it)
+            lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres,Jacobi_switch, Max_Div, Max_Div_All, folder, it)
             end_big = default_timer()
             time_big[it] = (end_big - start_big)
 
@@ -327,6 +328,10 @@ try:
 
                 filename10 = folder + '/Time_vec'
                 np.save(filename10,Time_vec)
+
+                filename11 = folder + '/Time_Pres'
+                np.save(filename11,Time_Pres)
+
 
                 if real_time:
                     cax_rho.clear()

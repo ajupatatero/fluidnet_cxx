@@ -614,6 +614,319 @@ T doClampComponentMAC
   return ret;
 }
 
+// Outflow Functions
+//
+//
+
+
+//Real getBulkVel
+//(
+//  const T& flags, const T& vel,
+//  int i,
+//  int j,
+//  int k,
+//){
+
+//  int bsz = flags.size(0);
+//  int d   = flags.size(2);
+//  int h   = flags.size(3);
+//  int w   = flags.size(4);
+//  bool is3D = (d > 1);
+
+//  Vec3 avg = Vec3(0,0,0);
+//  int count = 0;
+//  int size=1; // stencil size
+//  int nmax = (is3D ? size : 0);
+//  for (int n = -nmax; n<=nmax;n++){
+//       for (int m = -size; m<=size; m++){
+//           for (int l = -size; l<=size; l++){
+//                if (flags.isInBounds(Vec3i(i+l,j+m,k+n),0) && (flags.isFluid(i+l,j+m,k+n)||flags.isOutflow(i+l,j+m,k+n))){
+//                    avg += vel(i+l,j+m,k+n);
+//                    count++;
+//                }
+//           }
+//       }
+//  }
+//  return count>0 ? avg/count : avg;
+//}
+
+T ApplyOutflow
+(
+    const T& flags, const T& vel, 
+    const T& velPrev,
+    float dt,
+    int bWidth
+) {
+
+    AT_ASSERTM(vel.dim() == 5 && flags.dim() == 5,
+             "Dimension mismatch");
+    AT_ASSERTM(flags.size(1) == 1, "flags is not scalar");
+
+    int bsz = flags.size(0);
+    int d   = flags.size(2);
+    int h   = flags.size(3);
+    int w   = flags.size(4);
+    bool is3D = (d > 1);
+    const int32_t bnd =1;
+    int vlsz = vel.size(1);
+
+    auto options = vel.options();
+    int numel = d * h * w;
+
+    T velDst = vel.clone();
+    T ones_vel = at::ones_like(vel);;
+    //////////////////////////////////////////////////////////////
+
+    //T* cur_vel = &vel;
+    //T* cur_vel_prev = &vel_prev;
+
+    if (!is3D) {
+    AT_ASSERTM(d == 1, "d > 1 for a 2D domain");
+    }
+
+    AT_ASSERTM(vel.is_contiguous() && flags.is_contiguous(), "Input is not contiguous");
+
+    T vel_prev = vel.clone();
+    //T vel_prev = at::zeros({bsz, 1, d, h, w}, options).toType(vel.scalar_type());
+
+    T mCont = at::ones({bsz, 1, d, h, w}, options).toType(at::kByte); // Continue mask
+
+    T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz, d, h, w}).toType(at::kLong);
+    T idx_y = at::arange(0, h, options).view({1,h,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
+    T idx_z = zeros_like(idx_x);
+    if (is3D) {
+       idx_z = at::arange(0, d, options).view({1,d,1,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
+    }
+
+    T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(at::kLong);
+    idx_b = idx_b.expand({bsz,d,h,w});
+
+    T maskBorder = (idx_x < bnd).__or__
+                   (idx_x > w - 1 - bnd).__or__
+                   (idx_y < bnd).__or__
+                   (idx_y > h - 1 - bnd);
+    if (is3D) {
+        maskBorder = maskBorder.__or__(idx_z < bnd).__or__
+                                      (idx_z > d - 1 - bnd);
+    }
+    maskBorder.unsqueeze_(1);
+
+    //cur_vel->masked_fill_(maskBorder, 0);
+    mCont.masked_fill_(maskBorder, 0);
+
+    T maskFluid = flags.eq(TypeFluid);
+    T maskObstacle = flags.eq(TypeObstacle).__and__(mCont);
+    //cur_vel->masked_fill_(maskObstacle, 0);
+    mCont.masked_fill_(maskObstacle, 0);
+
+    T zero_f = at::zeros_like(vel); // Floating zero
+    T zero_l = at::zeros_like(vel).toType(at::kLong); // Long zero (for index)
+    T zero_l1 = at::zeros_like(flags).toType(at::kLong); // Long zero (for index)
+    T one_l = at::ones_like(flags).toType(at::kLong); // Long zero (for index)
+    T zeroBy = at::zeros_like(vel).toType(at::kByte); // Long zero (for index)
+    T oneBy = at::ones_like(vel).toType(at::kByte); // Long zero (for index)
+    // Otherwise, we are in a fluid or empty cell.
+    // First, we get all the neighbors.
+
+    T two_dim = at::arange(0, vlsz, options).view({1,vlsz,1,1,1}).toType(at::kLong);
+    two_dim = two_dim.expand({bsz,vlsz,d,h,w});
+    //T velC = *cur_vel_prev;
+
+    T Outflow_Cont =  mCont.__or__(oneBy.
+         where(flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeOutflow),zeroBy));
+
+    T Outflow = oneBy.
+         where(flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeOutflow),zeroBy);
+
+    T i_l = zero_l.where( (idx_x <=0), idx_x - 1);
+    T vel_1 = zero_f.
+        where(Outflow_Cont.ne(1), (vel_prev).index({idx_b, two_dim, idx_z, idx_y, i_l}));
+
+    T i_r = zero_l.where( (idx_x > w - 1 - bnd), idx_x + 1);
+    T vel_2 = zero_f.
+        where(Outflow_Cont.ne(1), (vel_prev).index({idx_b, two_dim, idx_z, idx_y, i_r}));
+
+    T j_l = zero_l.where( (idx_y <= 0), idx_y - 1);
+    T vel_3 = zero_f.
+        where(Outflow_Cont.ne(1), (vel_prev).index({idx_b, two_dim, idx_z, j_l, idx_x}));
+
+    T j_r = zero_l.where( (idx_y > h - 1 - bnd), idx_y + 1);
+    T vel_4 = zero_f.
+        where(Outflow_Cont.ne(1), (vel_prev).index({idx_b, two_dim, idx_z, j_r, idx_x}));
+
+    T k_l = zero_l.where( (idx_z <= 0), idx_z - 1);
+    T vel_5 = is3D ? zero_f.
+        where(Outflow_Cont.ne(1), (vel_prev).index({idx_b, two_dim, k_l, idx_y, idx_x})) : zero_f;
+
+    T k_r = zero_l.where( (idx_z > d - 1 - bnd), idx_z + 1);
+    T vel_6 = is3D ? zero_f.
+        where(Outflow_Cont.ne(1), (vel_prev).index({idx_b, two_dim, k_r, idx_y, idx_x})) : zero_f;
+
+
+    T neighborLeftOut = (oneBy.where(flags.index({idx_b, zero_l, idx_z, idx_y, i_l}).eq(TypeFluid),zeroBy)).__or__(
+         oneBy.where(flags.index({idx_b, zero_l, idx_z, idx_y, i_l}).eq(TypeOutflow),zeroBy));
+    T neighborRightOut = (oneBy.where(flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeFluid),zeroBy)).__or__(
+         oneBy.where(flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeOutflow),zeroBy));
+    T neighborBotOut = (oneBy.where(flags.index({idx_b, zero_l, idx_z, j_l, idx_x}).eq(TypeFluid),zeroBy)).__or__(
+         oneBy.where(flags.index({idx_b, zero_l, idx_z, j_l, idx_x}).eq(TypeOutflow),zeroBy));
+    T neighborUpOut = (oneBy.where(flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeFluid),zeroBy)).__or__(
+         oneBy.where(flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeOutflow),zeroBy));
+
+    T neighborLeftObs = mCont.__and__(zeroBy.
+                                      where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_l}).eq(TypeObstacle)));
+    T neighborRightObs = mCont.__and__(zeroBy.
+                                       where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeObstacle)));
+    T neighborBotObs = mCont.__and__(zeroBy.
+                                        where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_l, idx_x}).eq(TypeObstacle)));
+    T neighborUpObs = mCont.__and__(zeroBy.
+                                    where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeObstacle)));
+
+
+    T neighborBackOut = zeroBy;
+    T neighborFrontOut = zeroBy;
+
+    if (is3D) {
+
+      T neighborBackOut = (oneBy.where(flags.index({idx_b, zero_l, k_l, idx_y, idx_x}).eq(TypeFluid),zeroBy)).__or__(
+           oneBy.where(flags.index({idx_b, zero_l, k_l, idx_y, idx_x}).eq(TypeOutflow),zeroBy));
+      T neighborFrontOut = (oneBy.where(flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeFluid),zeroBy)).__or__(
+           oneBy.where(flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeOutflow),zeroBy));
+
+    }
+
+
+    T Bulk_Vel = 2*vel + vel_1 + vel_2 + vel_3 + vel_4;
+    T Bulk_flags = 2* Outflow_Cont + neighborLeftOut + neighborRightOut + neighborBotOut + neighborUpOut;
+ 
+    Bulk_Vel.masked_fill_(Outflow.ne(1), 0);
+    Bulk_flags.masked_fill_(Outflow.ne(1), 0);
+    
+    // To avoid dividing by zero
+    Bulk_flags.masked_fill_(Bulk_flags.eq(0), 1);
+
+    T Final_vel = Bulk_Vel/Bulk_flags.toType(at::kFloat);
+
+
+    //vel_1.masked_fill_(mCont.ne(1),0)
+    //vel_2.masked_fill_(mCont.ne(1),0)
+    //vel_3.masked_fill_(mCont.ne(1),0)
+    //vel_4.masked_fill_(mCont.ne(1),0)
+    //vel_5.masked_fill_(mCont.ne(1),0)
+    //vel_6.masked_fill_(mCont.ne(1),0)
+
+
+
+    velDst = vel_6;
+
+    vel_1.masked_fill_(maskFluid.eq(1),0);
+    vel_2.masked_fill_(maskFluid.eq(1),0);
+    vel_3.masked_fill_(maskFluid.eq(1),0);
+    vel_4.masked_fill_(maskFluid.eq(1),0);
+
+    T vel_neigh_outflow = vel_1 + vel_2 + vel_3 + vel_4;
+    std::cout << " AFTER MASKED FILL " << std::endl;
+    std::cout << "Vel Outflow Neigh  " <<  vel_neigh_outflow << std::endl;
+    std::cout << "Bulk Final  " << Final_vel  << std::endl;
+    std::cout << "Vel  " <<  vel << std::endl;
+    std::cout << "Outflow_Cont " <<  Outflow_Cont << std::endl;
+
+    std::cout << "neighborLeftOut " <<  neighborLeftOut << std::endl;
+    std::cout << "neighborRightOut " <<  neighborRightOut << std::endl;
+    std::cout << "neighborUpOut " <<  neighborUpOut << std::endl;
+    std::cout << "neighborBotOut " <<  neighborBotOut << std::endl;
+
+    // Add third dimension!!!
+    // Et unlever la partie Ux dans les vel_neigh_outflow x et Uy pour les vel_neigh_outflow y
+
+    T U_x_matrix = Outflow.__and__(oneBy.where(((flags.index({idx_b,  zero_l , idx_z, j_l, idx_x}).eq(TypeFluid).__or__
+                      (flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeFluid))).__and__
+                      (flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeOutflow))),zeroBy));
+
+    T U_y_matrix = Outflow.__and__(oneBy.where(((flags.index({idx_b,  zero_l , idx_z, idx_y, i_l}).eq(TypeFluid).__or__
+                      (flags.index({idx_b, zero_l, idx_z, idx_y, i_r}).eq(TypeFluid))).__and__
+                      (flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeOutflow))),zeroBy));
+
+    T U_z_matrix = Outflow.__and__(oneBy.where(((flags.index({idx_b, zero_l, k_l, idx_y, idx_x}).eq(TypeFluid).__or__
+                      (flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeFluid))).__and__
+                      (flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeOutflow))),zeroBy));
+
+    std::cout << "U_x_matrix " <<  U_x_matrix << std::endl;
+    std::cout << "U_y_matrix " <<  U_y_matrix << std::endl;
+
+    T vel_neigh_outflow_x =  vel_neigh_outflow.clone();
+    T vel_neigh_outflow_y =  vel_neigh_outflow.clone();
+
+    vel_neigh_outflow_x.masked_fill_(U_x_matrix.eq(1),0);
+    vel_neigh_outflow_y.masked_fill_(U_y_matrix.eq(1),0);
+ 
+    std::cout << "vel_neigh_outflow_x " <<  vel_neigh_outflow_x << std::endl;
+    std::cout << "vel_neigh_outflow_y " <<  vel_neigh_outflow_y << std::endl;
+
+    T new_tensor_x = vel_neigh_outflow_x.transpose(0,1);
+    T new_tensor_y = vel_neigh_outflow_y.transpose(0,1);
+    T new_tensor_v = vel_neigh_outflow.transpose(0,1);
+
+
+    new_tensor_v[0] = new_tensor_x[0];
+    new_tensor_v[1] = new_tensor_y[1];
+
+
+    T final_neigh_outflow = new_tensor_v.transpose(0,1);
+
+    std::cout << "final_neigh_outflow  " <<  final_neigh_outflow << std::endl;
+
+    // If ones > Final_vel mask = 1
+
+    T maxMask = zeroBy.where(ones_vel < Final_vel, oneBy);
+    T factor = ones_vel.masked_fill_(maxMask.eq(0),0) + Final_vel.masked_fill_(maxMask.eq(1),0);
+
+    std::cout << "Factor  " <<  factor << std::endl;
+
+    T velAux = ((vel - velPrev)/(factor))+final_neigh_outflow;
+
+    velAux.masked_fill_(maskFluid.eq(1),0);
+    velDst = velAux + vel;
+
+
+    std::cout << "velDst  " <<  velDst << std::endl;
+
+  /////////////////////////////////////////////////////////////
+
+  //if (flags.isOutflow(i,j,k)){
+ 
+  //   Vec3 bulkVel = getBulkVel(flags,vel,i,j,k);
+  //   bool done=false;
+  //   int dim = flags.is3D() ? 3 : 2;
+  //   Vec3i cur, low, up, flLow, flUp;
+  //   cur = low = up = flLow = flUp = Vec3i(i,j,k);  
+
+  //   for (int c = 0; c<dim; c++){
+  //       Real factor = timeStep*max((Real)1.0,bulkVel[c]); // prevent the extrapolated velocity from < 1
+  //       low[c] = flLow[c] = cur[c]-1;
+  //       up[c] = flUp[c] = cur[c]+1;
+  //       for (int d = 0; d<bWidth+1; d++){
+  //            if (cur[c]>d && flags.isFluid(flLow)) {
+  //               velDst(i,j,k)[c] = ((vel(i,j,k)[c] - velPrev(i,j,k)[c]) / factor) + vel(low)[c];
+  //               done=true;
+  //            }
+  //       
+  //       if (cur[c]<flags.getSize()[c]-d-1 && flags.isFluid(flUp)) {
+  //          if (done) velDst(i,j,k)[c] = 0.5*(velDst(i,j,k)[c] + ((vel(i,j,k)[c] - velPrev(i,j,k)[c]) / factor) + vel(up)[c]);
+  //          else velDst(i,j,k)[c] = ((vel(i,j,k)[c] - velPrev(i,j,k)[c]) / factor) + vel(up)[c];
+  //          done=true;
+  //       }
+  //       flLow[c]=flLow[c]-1;
+  //       flUp[c]=flUp[c]+1;
+  //       if (done) break;
+  //   }
+  //   low = up = flLow = flUp = cur;
+  //   done=false;
+  //}
+  
+ return velDst;
+}
+
+
 T MacCormackClampMAC
 (
   const T& flags, const T& vel, const T& dval,
@@ -659,6 +972,7 @@ at::Tensor advectVel
   float dt, T orig, T U, T flags,
   const std::string method_str,
   int bnd,
+  bool Openbound,
   const float maccormack_strength
 ) {
   // We treat 2D advection as 3D (with depth = 1) and
@@ -742,6 +1056,15 @@ at::Tensor advectVel
 
   if (method != ADVECT_MACCORMACK_FLUIDNET) {
     // We're done. The forward Euler step is already in the output array.
+    //
+    //
+    //   ADD OUTFLOW HERE
+
+    if (Openbound){
+        T vel = ApplyOutflow(flags,U,orig,dt,1);
+        U_dst = vel;
+    }      
+  
   } else {
     // Otherwise we need to do the backwards step (which is a SemiLagrange
     // step on the forward data - hence we needed to finish the above loops
@@ -803,6 +1126,12 @@ at::Tensor advectVel
       U_dst.select(1,2).masked_scatter_(maskBorder.ne(1).squeeze(1),
                ClampMAC.select(1,2).masked_select(maskBorder.ne(1).squeeze(1)));
     }
+
+    if (Openbound){
+        T vel = ApplyOutflow(flags,U,orig,dt,1);
+        U_dst = vel;
+    }
+
   }
   return U_dst;
 }
@@ -1010,7 +1339,7 @@ std::vector<T> solveLinearSystemJacobi
 
 T Precon_Z
 (
-    T& flags, 
+    T& flags,
     T& div, 
     T& residual, 
     T& Precon, 
@@ -1205,7 +1534,7 @@ std::vector<T> solveLinearSystemPCG
         //std::cout << "Debug 2" << std::endl;
 
         // Zero pressure on the border.
-	cur_p.masked_fill_(maskBorder, 0);
+        cur_p.masked_fill_(maskBorder, 0);
         mCont.masked_fill_(maskBorder, 0);
         
         T zero_f = at::zeros_like(p); // Floating zero
@@ -1234,8 +1563,7 @@ std::vector<T> solveLinearSystemPCG
         T j_r = zero_l.where( (idx_y > h - 1 - bnd), idx_y + 1);
         //T p4 = zero_f.
         //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, idx_z, j_r, idx_x})
-        //    .unsqueeze(1));
-        
+        //    .unsqueeze(1)); 
         T k_l = zero_l.where( (idx_z <= 0), idx_z - 1);
         //T p5 = is3D ? zero_f.
         //    where(mCont.ne(1), (*cur_p_prev).index({idx_b, zero_l, k_l, idx_y, idx_x})
