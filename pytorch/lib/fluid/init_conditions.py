@@ -1,5 +1,6 @@
 import torch
 import math
+import numpy as np
 
 def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     r"""Creates masks to enforce an inlet at the domain bottom wall.
@@ -12,9 +13,9 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     """
 
     #Jet length (jl -a) 
-    jl = 4
+    jl = 7
     #Jet first cell point
-    a=1
+    a=5
     
     flags = batch_dict['flags']
     
@@ -156,9 +157,41 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     # Upper layer rho2, vel = 0
     # Lower layer rho1, vel = 0
 
+
+    # New BC Distribution 
+    #rex_3 = np.int(resX/3)
+    #rey_3 = np.int(resY/3)
+
+    #rex_23 = np.int(2*resX/3)
+    #rey_23 = np.int(2*resY/3)
+
+    #X1 = torch.arange(0, rex_3, device=cuda).view(rex_3).expand((1,rey_3,rex_3))
+    #Y1 = torch.arange(0, rey_3, device=cuda).view(rey_3, 1).expand((1,rey_3,rex_3))
+
+    #coord_1 = torch.cat((X1,Y1), dim=0).unsqueeze(0).unsqueeze(2)
+
+    #X = torch.arange(0, resX, device=cuda).view(resX).expand((1,resY,resX))
+    #Y = torch.arange(0, resY, device=cuda).view(resY, 1).expand((1,resY,resX))
+    #coord_a = torch.cat((X,Y), dim=0).unsqueeze(0).unsqueeze(2)
+
+    #coord = torch.zeros((1,2,1,resY,resX))
+    #coord[:,0,:,(rey_3):(rey_23-1),rex_3:(rex_23-1)]= coord_1[:,0]
+    #coord[:,1,:,:,:]=coord_a[:,1]
+
+    #coord= coord.cuda()
+
+    #normalized_x = (coord[:,0].float()/np.float(rex_3)).cuda()
+    #normalized_y = (coord[:,1].float()/np.float(resY)).cuda()
+
+
+    # Old BC Distribution
+
     X = torch.arange(0, resX, device=cuda).view(resX).expand((1,resY,resX))
     Y = torch.arange(0, resY, device=cuda).view(resY, 1).expand((1,resY,resX))
     coord = torch.cat((X,Y), dim=0).unsqueeze(0).unsqueeze(2)
+
+    normalized_x = (coord[:,0].float()/np.float(resX-1))
+    normalized_y = (coord[:,1].float()/np.float(resY-1))
 
     # Atwood number
     #A = ((1+rho2) - (1+rho1)) / ((1+rho2) + (1+rho1))
@@ -169,9 +202,15 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     ampl = mconf['perturbAmplitude']
     h = mconf['height']
 
-    density = 0.5*(rho2+rho1 + (rho2-rho1)*torch.tanh(thick*((coord[:,1]/resY).float() - \
-            (h + ampl*torch.cos(2*math.pi*(coord[:,0]/resX).float()))))).unsqueeze(1)
+    teta_cos = 2*math.pi*normalized_x
 
+    print("Nor x ", normalized_x[0,0,105,:])
+    print("Teta cos ", teta_cos[0,0,105,:])
+
+    #density = 0.5*(rho2+rho1 + (rho2-rho1)*torch.tanh(thick*((coord[:,1]/resY).float() - \
+    #        (h + ampl*torch.cos(2*math.pi*(coord[:,0]/resX).float()))))).unsqueeze(1)
+
+    density = 0.5*(rho2+rho1 + (rho2-rho1)*torch.tanh(thick*(normalized_y - (h - ampl*torch.cos(teta_cos))))).unsqueeze(1)
 
     print("bottom",  0.5*(rho2+rho1 + (rho2-rho1)*math.tanh(thick*((1) - \
             (h + ampl*math.cos(2*math.pi*(64/resX)))))))
@@ -179,8 +218,8 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     print("top",  0.5*(rho2+rho1 + (rho2-rho1)*math.tanh(thick*( - \
             (h + ampl*math.cos(2*math.pi*(64/resX)))))))
 
-    print("density tensor", density[0,0,0,500:512, 0])
-    print("density tensor", density[0,0,0,0:10, 127])
+    print("density tensor", density[0,0,0,500:512, 1])
+    print("density tensor", density[0,0,0,0:10, -2])
     print("density", density.shape)
     print("height", h)
 

@@ -6,10 +6,9 @@
 # This table is saved to disk, in <outputFolder>, at every iteration and
 # is loaded when restarting a sim.
 # To restart precise <outputFolder> and set restartSim to true.
-
 # res : Resolution of domain
-resX: 128
-resY: 512
+resX: 200
+resY: 400
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
@@ -18,7 +17,7 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/jacobi"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/Debug_perio_Ux_NoW_NewNor"
 # simMethod: choose convnet or jacobi
 simMethod: "jacobi"
 # modelDir : location of trained model
@@ -26,11 +25,11 @@ modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
-dt: 0.5
+dt: 0.025
 # statIter : iterations frequency for output
-statIter: 10
+statIter: 20
 # maxIter : maximum number of simulation iterations
-maxIter: 2000
+maxIter: 2000 
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -44,8 +43,8 @@ maccormackStrength: 0.6
 # rho_0 being the average density and delta_rho local difference of density
 # w.r.t average density.
 # Mantaflow calls (1) gravity and (2) buoyancy and allows for different g's 
-buoyancyScale: 1.
-gravityScale: 0
+buoyancyScale: 40.
+gravityScale: 0.
 # Introduces a correcting factor in the denisty equation 
 # from "A splitting method for incompressible flows with variable
 # density based on a pressure Poisson equation" (Guermond, Salgado).
@@ -61,7 +60,7 @@ operatingDensity: 0.0
 # pTol : convergence criterion for Jacobi method
 pTol: 0.0
 # jacobiIter : maximum number of iterations for Jacobi method
-jacobiIter: 200
+jacobiIter: 400
 # gravityVec : orientation of the gravity vector when buoyancy/gravity 
 # are present.
 gravityVec:
@@ -69,8 +68,14 @@ gravityVec:
     y:  1.0
     z:  0.0
 # Rayleigh Taylor parameters
-rho2: 0.1
-rho1: -0.1
-perturbThickness: 100
-perturbAmplitude : 0.01
+rho2: 0.5
+rho1: -0.5
+perturbThickness: 100 # 20 = Thick !, 500 = Thin!
+perturbAmplitude: 0.01
 height: 0.5
+# Extra parameters for lib.simulate
+#If True we will update the divergency outside the Box!
+outside_Ja: False
+#Threshold for the Jacobi its
+threshold_Div: 1.e-3
+

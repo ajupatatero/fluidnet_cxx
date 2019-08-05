@@ -55,12 +55,19 @@ parser.add_argument('--outputFolder',
 parser.add_argument('--restartSim', action='store_true', default=False,
         help='R|Restarts simulation from checkpoint.\n'
         'Default: written in simConf file.')
+parser.add_argument('-sT','--setThreshold',
+        help='R|Sets the Divergency Threshold.\n'
+        'Default: written in simConf file.', type =float)
+parser.add_argument('-delT','--setdt',
+        help='R|Sets the dt.\n'
+        'Default: written in simConf file.', type =float)
 
 arguments = parser.parse_args()
 
 # Loading a YAML object returns a dict
 with open(arguments.simConf, 'r') as f:
     simConf = yaml.load(f, Loader=yaml.FullLoader)
+
 with open(arguments.trainingConf, 'r') as f:
     conf = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -141,6 +148,10 @@ try:
         density = torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
 
         fluid.emptyDomain(flags)
+
+        #flags[0,0,0,1:-1,0]= torch.ones((resY-2), dtype=torch.float).cuda()
+        #flags[0,0,0,1:-1,-1]=torch.ones((resY-2), dtype=torch.float).cuda()
+
         batch_dict = {}
         batch_dict['p'] = p
         batch_dict['U'] = U
@@ -158,7 +169,7 @@ try:
         rho1 = mconf['rho1']
         rho2 = mconf['rho2']
 
-        mconf['periodic-y'] = True
+        mconf['periodic-y'] = True   
         mconf['periodic-x'] = False
 
         net = model_saved.FluidNet(mconf, it, dropout=False)
@@ -173,6 +184,20 @@ try:
         print('Creating initial conditions')
         fluid.createRayleighTaylorBCs(batch_dict, mconf, rho1=rho1, rho2=rho2)
         # If restarting, overwrite all fields with checkpoint.
+
+        # Periodic Density
+
+        #density_p = batch_dict['density'].clone()
+
+        #density_p[0,0,0,1:200,0]= (rho1*torch.ones((199), dtype=torch.float)).cuda()
+        #density_p[0,0,0,200:399,0]=(rho2*torch.ones((199), dtype=torch.float)).cuda()
+
+        #density_p[0,0,0,1:200,-1]= (rho1*torch.ones((199), dtype=torch.float)).cuda()
+        #density_p[0,0,0,200:399,-1]=(rho2*torch.ones((199), dtype=torch.float)).cuda()
+
+        #batch_dict['density'] = density_p
+
+        #####
 
         density_b =  batch_dict['density'].clone()
         rho_avga = torch.mean(density_b).item()
@@ -253,8 +278,22 @@ try:
             rho_avgc = torch.mean(density_c).item()
             print("Avg rho 2 = " + str(rho_avgc))
 
+            #Time Vec Declaration
+            Time_vec = np.zeros(max_iter)
+            Time_Pres = np.zeros(max_iter)
+            time_big = np.zeros(max_iter)
+            Jacobi_switch = np.zeros(max_iter)
+            Max_Div = np.zeros(max_iter)
+            Max_Div_All = np.zeros(max_iter)
+
+            dt = arguments.setdt or simConf['dt']
+            Outside_Ja = simConf['outside_Ja']
+            Threshold_Div = arguments.setThreshold or simConf['threshold_Div']
+
+
             method = mconf['simMethod']
-            lib.simulate(mconf, batch_dict, net, method, it)
+            #lib.simulate(mconf, batch_dict, net, method, it)
+            lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
 
             density_d =  batch_dict['density'].clone()
             rho_avgd = torch.mean(density_d).item()

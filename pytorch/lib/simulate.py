@@ -20,9 +20,11 @@ def setConstVals(batch_dict, p, U, flags, density):
     if ('UBCInvMask' in batch_dict) and ('UBC' in batch_dict):
 
         # Zero out the U values on the BCs.
-        U.mul_(batch_dict['UBCInvMask'])
+        #U.mul_(batch_dict['UBCInvMask'])
+        U.mul_(batch_dict['densityBCInvMask'])
         # Add back the values we want to specify.
         U.add_(batch_dict['UBC'])
+               
         batch_dict['U'] = U.clone()
 
     if ('densityBCInvMask' in batch_dict) and ('densityBC' in batch_dict):
@@ -70,6 +72,23 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
    
     #flags_i = batch_dict['flags_inflow']  
 
+    if (it% 1 == 0):
+        U_inx = U.clone()
+        Uinter1_cpu = U_inx.cpu()
+
+        filename_inter1 = folder + '/Ux_Before_Advection_{0:05}'.format(it)
+        #np.save(filename_inter1,Uinter1_cpu[:,0])
+
+        filename_inter2 = folder + '/Uy_Before_Advection_{0:05}'.format(it)
+        #np.save(filename_inter2,Uinter1_cpu[:,1])
+
+        Density_1 = batch_dict['density']
+        Rho_inx = Density_1.clone()
+        Rhointer_cpu = Rho_inx.cpu()
+        filename_rhointer1 = folder + '/Rho_Before_Advection_{0:05}'.format(it)
+        #np.save(filename_rhointer1,Rhointer_cpu)
+
+
     stick = False
     if 'flags_stick' in batch_dict:
         stick = True
@@ -93,6 +112,23 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             fluid.correctScalar(dt, density, div, flags)
     else:
         density = torch.zeros_like(flags)
+
+
+    if (it% 1 == 0):
+        U_inx = U.clone()
+        Uinter1_cpu = U_inx.cpu()
+
+        filename_inter1 = folder + '/Ux_After_Rho_Advection_{0:05}'.format(it)
+        #np.save(filename_inter1,Uinter1_cpu[:,0])
+
+        filename_inter2 = folder + '/Uy_After_Rho_Advection_{0:05}'.format(it)
+        #np.save(filename_inter2,Uinter1_cpu[:,1])
+
+        Rho_inx = density.clone()
+        Rhointer_cpu = Rho_inx.cpu()
+        filename_rhointer1 = folder + '/Rho_After_Rho_Advection_{0:05}'.format(it)
+        #np.save(filename_rhointer1,Rhointer_cpu)
+
 
     #Debug Ekhi 13/06/19
     """
@@ -198,12 +234,23 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     if sim_method != 'convnet':
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             U_temp = U.clone()
-        U = fluid.setWallBcs(U, flags)
+            # Density peridoicty
+            density_temp = density.clone()
+        #U = fluid.setWallBcs(U, flags)
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             if mconf['periodic-x']:
-                U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
+                U[:,0,:,:,1] = U_temp[:,0,:,:,U.size(4)-1]
+                density[:,0,:,:,1] = density_temp[:,0,:,:,U.size(4)-1]
             if mconf['periodic-y']:
-                U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
+                #U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
+                #density[:,0,:,:,1] = density_temp[:,0,:,:,-2]
+
+                U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
+                #U[:,1,:,:,2] = U_temp[:,1,:,:,-3]
+                U[:,0,:,:,2] = U_temp[:,0,:,:,-2]
+                density[:,:,:,:,1] = density_temp[:,:,:,:,-2]
+                #density[:,:,:,:,2] = density_temp[:,:,:,:,-3]
+
     elif stick:
         fluid.setWallBcsStick(U, flags, flags_stick)
 
@@ -222,10 +269,21 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     #np.save(filename_inter,Uinter_cpu)
 
     #Print Before U
-    #U_inx = U.clone()
-    #Uinter1_cpu = U_inx.cpu()
-    #filename_inter1 = folder + '/U1_NN_Intermediate1_{0:05}'.format(it)
-    #np.save(filename_inter1,Uinter1_cpu)
+    if (it% 1 == 0):    
+        U_inx = U.clone()
+        Uinter1_cpu = U_inx.cpu()
+
+        filename_inter1 = folder + '/Ux_After_Advection_{0:05}'.format(it)
+        #np.save(filename_inter1,Uinter1_cpu[:,0])
+
+        filename_inter2 = folder + '/Uy_After_Advection_{0:05}'.format(it)
+        #np.save(filename_inter2,Uinter1_cpu[:,1])
+
+        Rho_inx = density.clone()
+        Rhointer_cpu = Rho_inx.cpu()
+        filename_rhointer1 = folder + '/Rho_After_Advection_{0:05}'.format(it)
+        #np.save(filename_rhointer1,Rhointer_cpu)
+
 
     #Print Before U
     #Uinxb = U.clone()
@@ -302,8 +360,13 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         # Inflow 
         inflow = torch.zeros_like(flags)
         inflow_border = torch.zeros_like(flags)
-        inflow = ((batch_dict['UBC'][:,1,:,:,:]).unsqueeze(1))>0.0001
-        inflow_border[0,0,0,1,:]= inflow[0,0,0,1,:]
+
+        inflow_bool = False
+
+        if inflow_bool:
+
+            inflow = ((batch_dict['UBC'][:,1,:,:,:]).unsqueeze(1))>0.0001
+            inflow_border[0,0,0,1,:]= inflow[0,0,0,1,:]
 
         #Debug
         print(" ========================================================================")
@@ -368,12 +431,23 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     if sim_method != 'convnet':
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             U_temp = U.clone()
-        U = fluid.setWallBcs(U, flags)
+            # Density peridoicty
+            density_temp = density.clone()
+        #U = fluid.setWallBcs(U, flags)
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             if mconf['periodic-x']:
                 U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
+                density[:,0,:,:,1] = density_temp[:,0,:,:,U.size(4)-1]
             if mconf['periodic-y']:
-                U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
+                #U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
+                #density[:,0,:,:,1] = density_temp[:,0,:,:,-2]
+
+                U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
+                #U[:,1,:,:,2] = U_temp[:,1,:,:,-3]
+                U[:,0,:,:,2] = U_temp[:,0,:,:,-2]
+                density[:,:,:,:,1] = density_temp[:,:,:,:,-2]
+                #density[:,:,:,:,2] = density_temp[:,:,:,:,-3]
+
     elif stick:
         fluid.setWallBcsStick(U, flags, flags_stick)
 
@@ -383,7 +457,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     #Time Vec Saving
     Time_vec[it] = time
     filename = folder + '/Time'
-    np.save(filename, Time_vec)
+    #np.save(filename, Time_vec)
 
     setConstVals(batch_dict, p, U, flags, density)
 
@@ -427,12 +501,13 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
                 if 'periodic-x' in mconf and 'periodic-y' in mconf:
                     U_temp = U.clone()
-                U = fluid.setWallBcs(U, flags)
+                #U = fluid.setWallBcs(U, flags)
                 if 'periodic-x' in mconf and 'periodic-y' in mconf:
                     if mconf['periodic-x']:
                         U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
                     if mconf['periodic-y']:
-                        U[:,0,:,1] = U_temp[:,0,:,U.size(3)-1]
+                        U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
+                        density[:,:,:,:,1] = density_temp[:,:,:,:,-2]
                 if stick:
                     fluid.setWallBcsStick(U, flags, flags_stick)   
 
@@ -444,8 +519,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 print("Counter :", Counter)
                 print("Div Max :", (abs(div_after).max()).item())
                  
-        
-    
+   
     end_Pres = default_timer()
     time_Pressure=(end_Pres - start_Pres)
     print("time Pressure ", time_Pressure)
@@ -454,6 +528,53 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
     div_final  = fluid.velocityDivergence(U, flags)
     Max_Div_All[it] = (abs(div_final).max()).item()
+
+    if sim_method != 'convnet':
+        if 'periodic-x' in mconf and 'periodic-y' in mconf:
+            U_temp = U.clone()
+            # Density peridoicty
+            density_temp = density.clone()
+        if 'periodic-x' in mconf and 'periodic-y' in mconf:
+            if mconf['periodic-x']:
+
+                U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]
+                density[:,0,:,:,1] = density_temp[:,0,:,:,U.size(4)-1]
+
+            if mconf['periodic-y']:
+
+                print(" Periodic y !")
+                print("U copying ", U_temp[0,1,0,175:200,-2])
+                print("U modifying before ", U[0,1,0,175:200,1])
+
+                U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
+                #U[:,1,:,:,2] = U_temp[:,1,:,:,-3]
+                U[:,0,:,:,2] = U_temp[:,0,:,:,-2]
+
+                print("U modifying after ", U[0,1,0,175:200,1])
+
+#                print("RHO 0 ", U[0,0,0,175:200,0])
+#                print("RHO 1 ", U[0,0,0,175:200,1])
+#                print("RHO 2 ", U[0,0,0,175:200,2])
+#
+#                print("RHO -3 ", U[0,0,0,175:200,-3])
+#                print("RHO -2 ", U[0,0,0,175:200,-2])
+#                print("RHO -1 ", U[0,0,0,175:200,-1])
+#
+#
+#                print("RHO 0 ", density[0,0,0,175:200,0])
+#                print("RHO 1 ", density[0,0,0,175:200,1])
+#                print("RHO 2 ", density[0,0,0,175:200,2])
+#
+#                print("RHO -3 ", density[0,0,0,175:200,-3])
+#                print("RHO -2 ", density[0,0,0,175:200,-2])
+#                print("RHO -1 ", density[0,0,0,175:200,-1])
+#
+                print("RHO copying ", density_temp[0,0,0,175:200,-2])
+                print("RHO modifying before ", density[0,0,0,175:200,1])
+#
+                density[:,:,:,:,1] = density_temp[:,:,:,:,-2]
+#                #density[:,:,:,:,2] = density_temp[:,:,:,:,-3]
+                print("RHO modifying after ", density[0,0,0,175:200,1])
 
     batch_dict['U'] = U
     batch_dict['density'] = density
