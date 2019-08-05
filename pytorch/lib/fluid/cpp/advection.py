@@ -103,7 +103,7 @@ def advectVelocity(dt, orig, U, flags, method = 'maccormackFluidNet', boundary_w
     Open_mask = flags.eq(16)
     Openboundary = (Open_mask.sum()>1)
 
-    print("Boundary ", Openboundary)
+    #print("Boundary ", Openboundary)
 
     is3D = U.size(1) == 3
     if (not is3D):
