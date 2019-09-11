@@ -259,10 +259,12 @@ T calcRayBorderIntersection(const T& pos, const T& next_pos,
 void calcLineTrace(const T& pos, const T& delta, const T& flags,
                 T& new_pos, const bool do_line_trace){
 
+  //std::cout << "Entering calc line trace  " << std::endl;
   T maskRet = at::zeros_like(flags).toType(at::kByte);
   T mCont = at::ones_like(flags).toType(at::kByte);
   if (!do_line_trace) {
     new_pos = pos + delta;
+    //std::cout << "Not doing Line Trace!  " << std::endl;
     return;  //return maskRet;
   }
 

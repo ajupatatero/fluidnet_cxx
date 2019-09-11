@@ -35,23 +35,35 @@ T SemiLagrangeEulerFluidNet
   ret.masked_scatter_(maskSolid, src.masked_select(maskSolid));
   
   T pos = at::zeros({bsz, 3, d, h, w}, options).toType(src.scalar_type());
- 
+
+  //std::cout << "OK 3 " << std::endl;
+
   pos.select(1,0) = i.toType(src.scalar_type()) + 0.5;
   pos.select(1,1) = j.toType(src.scalar_type()) + 0.5;
   pos.select(1,2) = k.toType(src.scalar_type()) + 0.5;
 
   T displacement = zeros_like(pos);
  
+  //std::cout << "OK 4 " << std::endl;
+
   // getCentered already eliminates border cells, no need to perform a masked select.
+  // Ekhi modification 06/09/2019
+
   displacement.masked_scatter_(maskBorder.ne(1), getCentered(vel));
+  //displacement.masked_scatter_(maskBorder.ne(1), getCentered_temp(vel));
+
   displacement.mul_(-dt);
  
+  //std::cout << "OK 5 " << std::endl;
+
   // Calculate a line trace from pos along displacement.
   // NOTE: this is expensive (MUCH more expensive than Manta's routines), but
   // can avoid some artifacts which would occur sampling into Geometry.
   T back_pos = at::empty_like(pos);
   calcLineTrace(pos, displacement, flags, back_pos,line_trace);
   
+  //std::cout << "OK 6 " << std::endl;
+
   // Finally, sample the field at this back position.
   if (!sample_outside_fluid) {
     ret.masked_scatter_(maskFluid,
@@ -298,7 +310,7 @@ at::Tensor advectScalar
   AdvectMethod method = StringToAdvectMethod(method_str);
   const bool is_levelset = false;
   const int order_space = 1;
-  const bool line_trace = true;
+  const bool line_trace = false;
 
   T pos_corrected = at::zeros({bsz, 3, d, h, w}, options).toType(src.scalar_type());
 
@@ -311,21 +323,33 @@ at::Tensor advectScalar
      idx_z = at::arange(0, d, options).view({1,d,1,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
   }
 
+  // Temporary Fix ! Ekhi 06/08/2019
+
+  //T maskBorder = flags.eq(TypeObstacle);
+
+  //std::cout << "Mask Border   "<< maskBorder << std::endl;
+
   T maskBorder = (idx_x < bnd).__or__
                  (idx_x > w - 1 - bnd).__or__
                  (idx_y < bnd).__or__
                  (idx_y > h - 1 - bnd);
+  maskBorder.unsqueeze_(1);
+
+  //std::cout << "Mask Border  "<< maskBorder << std::endl;
+
   if (is3D) {
       maskBorder = maskBorder.__or__(idx_z < bnd).__or__
                                     (idx_z > d - 1 - bnd);
   }
-  maskBorder.unsqueeze_(1);
+  //maskBorder.unsqueeze_(1);
  
   // Manta zeros stuff on the border.
   cur_dst.masked_fill_(maskBorder, 0);
+  //std::cout << "OK 1 "<< std::endl;
   pos_corrected.select(1,0) = idx_x.toType(src.scalar_type()) + 0.5;
   pos_corrected.select(1,1) = idx_y.toType(src.scalar_type()) + 0.5;
   pos_corrected.select(1,2) = idx_z.toType(src.scalar_type()) + 0.5;
+  //std::cout << "OK 2 " << std::endl;
 
   fwd_pos.select(1,0).masked_scatter_(maskBorder.squeeze(1), pos_corrected.select(1,0).masked_select(maskBorder.squeeze(1)));
   fwd_pos.select(1,1).masked_scatter_(maskBorder.squeeze(1), pos_corrected.select(1,1).masked_select(maskBorder.squeeze(1)));
@@ -432,12 +456,36 @@ T SemiLagrangeEulerFluidNetMAC
   T xpos;
   calcLineTrace(pos, vec3_0.masked_scatter_(maskBorder.eq(0),
               getAtMACX(vel)) * (-dt), flags, xpos, line_trace);
+  //calcLineTrace(pos, vec3_0.masked_scatter_(maskBorder.eq(0),
+  //            getAtMACX_temp(vel)) * (-dt), flags, xpos, line_trace);
+
+  //std::cout << "1  Line trace  " << std::endl;
+
+  // Two differnet interpolation functions! 
   const T vx = interpolComponent(src, xpos, 0);
+  //const T vx = interpolComponent_temp(src, xpos, 0);
+
+  //std::cout << "End of first interpol  " << std::endl;
 
   T ypos;
+  //std::cout << "Begin second line trace  " << std::endl;
+  //std::cout << "Problem? vel  "<< vel << std::endl;
+  //std::cout << "Problem? vec3_0  "<< vec3_0 << std::endl;
+  //std::cout << "Problem?getMac "<< getAtMACY_temp(vel) << std::endl;
+  //std::cout << "Problem?"<< std::endl;
+
+  //calcLineTrace(pos, vec3_0.masked_scatter_(maskBorder.eq(0),
+  //            getAtMACY_temp(vel)) * (-dt), flags, ypos,line_trace);
   calcLineTrace(pos, vec3_0.masked_scatter_(maskBorder.eq(0),
               getAtMACY(vel)) * (-dt), flags, ypos,line_trace);
+
+  //std::cout << "Problem? ypos  "<< ypos << std::endl;
+
+  //std::cout << "2 Line traces  " << std::endl;
+
+  // Two differnet interpolation functions! 
   const T vy = interpolComponent(src, ypos, 1);
+  //const T vy = interpolComponent_temp(src, ypos, 1);
 
   T vz = zeros_like(vy);
   if (is3D) {
@@ -447,7 +495,9 @@ T SemiLagrangeEulerFluidNetMAC
     const T vz = interpolComponent(src, zpos, 2);
   }
 
+  //std::cout << "Before ending  " << std::endl;
   ret.masked_scatter_(maskFluid, (at::cat({vx, vy, vz}, 1)).masked_select(maskFluid));
+
   return ret;
 }
 
@@ -824,16 +874,16 @@ T ApplyOutflow
     vel_4.masked_fill_(maskFluid.eq(1),0);
 
     T vel_neigh_outflow = vel_1 + vel_2 + vel_3 + vel_4;
-    std::cout << " AFTER MASKED FILL " << std::endl;
-    std::cout << "Vel Outflow Neigh  " <<  vel_neigh_outflow << std::endl;
-    std::cout << "Bulk Final  " << Final_vel  << std::endl;
-    std::cout << "Vel  " <<  vel << std::endl;
-    std::cout << "Outflow_Cont " <<  Outflow_Cont << std::endl;
+    //std::cout << " AFTER MASKED FILL " << std::endl;
+    //std::cout << "Vel Outflow Neigh  " <<  vel_neigh_outflow << std::endl;
+    //std::cout << "Bulk Final  " << Final_vel  << std::endl;
+    //std::cout << "Vel  " <<  vel << std::endl;
+    //std::cout << "Outflow_Cont " <<  Outflow_Cont << std::endl;
 
-    std::cout << "neighborLeftOut " <<  neighborLeftOut << std::endl;
-    std::cout << "neighborRightOut " <<  neighborRightOut << std::endl;
-    std::cout << "neighborUpOut " <<  neighborUpOut << std::endl;
-    std::cout << "neighborBotOut " <<  neighborBotOut << std::endl;
+    //std::cout << "neighborLeftOut " <<  neighborLeftOut << std::endl;
+    //std::cout << "neighborRightOut " <<  neighborRightOut << std::endl;
+    //std::cout << "neighborUpOut " <<  neighborUpOut << std::endl;
+    //std::cout << "neighborBotOut " <<  neighborBotOut << std::endl;
 
     // Add third dimension!!!
     // Et unlever la partie Ux dans les vel_neigh_outflow x et Uy pour les vel_neigh_outflow y
@@ -850,8 +900,8 @@ T ApplyOutflow
                       (flags.index({idx_b, zero_l, k_r, idx_y, idx_x}).eq(TypeFluid))).__and__
                       (flags.index({idx_b, zero_l, idx_z, idx_y, idx_x}).eq(TypeOutflow))),zeroBy));
 
-    std::cout << "U_x_matrix " <<  U_x_matrix << std::endl;
-    std::cout << "U_y_matrix " <<  U_y_matrix << std::endl;
+    //std::cout << "U_x_matrix " <<  U_x_matrix << std::endl;
+    //std::cout << "U_y_matrix " <<  U_y_matrix << std::endl;
 
     T vel_neigh_outflow_x =  vel_neigh_outflow.clone();
     T vel_neigh_outflow_y =  vel_neigh_outflow.clone();
@@ -859,8 +909,8 @@ T ApplyOutflow
     vel_neigh_outflow_x.masked_fill_(U_x_matrix.eq(1),0);
     vel_neigh_outflow_y.masked_fill_(U_y_matrix.eq(1),0);
  
-    std::cout << "vel_neigh_outflow_x " <<  vel_neigh_outflow_x << std::endl;
-    std::cout << "vel_neigh_outflow_y " <<  vel_neigh_outflow_y << std::endl;
+    //std::cout << "vel_neigh_outflow_x " <<  vel_neigh_outflow_x << std::endl;
+    //std::cout << "vel_neigh_outflow_y " <<  vel_neigh_outflow_y << std::endl;
 
     T new_tensor_x = vel_neigh_outflow_x.transpose(0,1);
     T new_tensor_y = vel_neigh_outflow_y.transpose(0,1);
@@ -873,7 +923,7 @@ T ApplyOutflow
 
     T final_neigh_outflow = new_tensor_v.transpose(0,1);
 
-    std::cout << "final_neigh_outflow  " <<  final_neigh_outflow << std::endl;
+    //std::cout << "final_neigh_outflow  " <<  final_neigh_outflow << std::endl;
 
     // If ones > Final_vel mask = 1
 
@@ -1016,6 +1066,11 @@ at::Tensor advectVel
      idx_z = at::arange(0, d, options).view({1,d,1,1}).expand({bsz, d, h, w}).toType(idx_x.scalar_type());
   }
 
+  //std::cout << "Mask Problem  " << std::endl;
+
+  // Temporary Fix ! Ekhi 06/08/2019
+  //T maskBorder = flags.eq(TypeObstacle);
+
   T maskBorder = (idx_x < bnd).__or__
                  (idx_x > w - 1 - bnd).__or__
                  (idx_y < bnd).__or__
@@ -1039,8 +1094,10 @@ at::Tensor advectVel
   T val;
   if (method == ADVECT_EULER_FLUIDNET ||
       method == ADVECT_MACCORMACK_FLUIDNET) {
+    //std::cout << "First Euler  " << std::endl;
     val = SemiLagrangeEulerFluidNetMAC(flags, U, orig, maskBorder, dt, order_space,
             line_trace, idx_x, idx_y, idx_z);
+    //std::cout << "End of First Euler  " << std::endl;
   } else {
     AT_ERROR("No defined method for MAC advection");
   }
@@ -1059,7 +1116,7 @@ at::Tensor advectVel
     //
     //
     //   ADD OUTFLOW HERE
-
+    //std::cout << "WE ARE JUST PERFORMING EULER " << std::endl;
     if (Openbound){
         T vel = ApplyOutflow(flags,U,orig,dt,1);
         U_dst = vel;
@@ -1210,6 +1267,8 @@ std::vector<T> solveLinearSystemJacobi
     }
     maskBorder.unsqueeze_(1);
 
+    //T maskBorder = flags.eq(TypeObstacle);
+
     cur_p->masked_fill_(maskBorder, 0);
     mCont.masked_fill_(maskBorder, 0);
 
@@ -1263,6 +1322,22 @@ std::vector<T> solveLinearSystemJacobi
          where(mCont.ne(1), flags.index({idx_b, zero_l, idx_z, j_r, idx_x}).eq(TypeObstacle)).unsqueeze(1));
     T neighborBackObs = zeroBy;
     T neighborFrontObs = zeroBy;
+
+    //std::cout << "i_l  "<< i_l  << std::endl;
+    //std::cout << "p1  " << p1 << std::endl;
+    //std::cout << "neighborLeftObs  " << neighborLeftObs << std::endl;
+
+    //std::cout << "i_r  " << i_r << std::endl;
+    //std::cout << "p2  " << p2 << std::endl;
+    //std::cout << "neighborRightObs  " << neighborRightObs << std::endl;
+
+    //std::cout << "j_l  " << j_l << std::endl;
+    //std::cout << "p3  " << p3 << std::endl;
+    //std::cout << "neighborBotObs  " << neighborBotObs << std::endl;
+
+    //std::cout << "j_r  " << j_r << std::endl;
+    //std::cout << "p4  " << p4 << std::endl;
+    //std::cout << "neighborUpObs  " << neighborUpObs << std::endl;
 
     if (is3D) {
       T neighborBackObs = mCont.__and__(zeroBy.

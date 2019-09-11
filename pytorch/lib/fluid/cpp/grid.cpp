@@ -311,6 +311,67 @@ T getCentered(const T& self) {
   return at::stack({c_vel_x, c_vel_y, c_vel_z}, 1);
 }
 
+// Ekhi 07/09/2019
+// Modification of gencetered where we do not cut off the border cells
+//
+
+T getCentered_temp(const T& self) {
+
+  int bsz = self.size(0);
+  int d = self.size(2) ;
+  int h = self.size(3);
+  int w = self.size(4);
+
+  auto options = self.options();
+
+  bool is3D = (d > 1);
+  d = is3D? (d-1): 2;
+  //h -= 1;
+  //w -= 1;
+
+  std::cout << "We re inside  1" << std::endl;
+
+  T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_y = at::arange(0, h, options).view({1,h, 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_z = at::zeros_like(idx_x);
+  if (is3D) {
+     idx_z = at::arange(1, d, options).view({1,d, 1 , 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  }
+
+  T mns_one = at::ones_like(idx_x); // Floating zero
+
+  T idx_x_new = idx_x.where(idx_x<w-1,(idx_x-(w*mns_one)));
+  T idx_y_new = idx_y.where(idx_y<h-1,(idx_y-(h*mns_one)));
+  T idx_z_new = idx_z.where(idx_z<d,(idx_z-(d*mns_one)));
+
+  std::cout << "We re inside  2" << std::endl;
+
+  T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(idx_x.scalar_type());
+  idx_b = idx_b.expand({bsz,d,h,w});
+
+  T idx_c = at::arange(0, 3, options).view({1,3,1,1,1}).toType(idx_x.scalar_type());
+
+  std::cout << "We re inside  3" << std::endl;
+
+  T c_vel_x = 0.5 * ( self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new  ,idx_x_new  }) +
+                    self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new  ,idx_x_new+1}) );
+  T c_vel_y = 0.5 * ( self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y_new  ,idx_x_new  }) +
+                    self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y_new+1,idx_x_new  }) );
+  T c_vel_z = at::zeros_like(c_vel_x);
+
+  std::cout << "We re inside  4" << std::endl;
+
+  if (is3D) {
+    c_vel_z = 0.5 * ( self.index({idx_b,idx_c.select(1,2) ,idx_z  ,idx_y  ,idx_x  }) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z+1,idx_y  ,idx_x  }) );
+  }
+
+  return at::stack({c_vel_x, c_vel_y, c_vel_z}, 1);
+}
+
+// End of getCentered_temp
+
+
 T getAtMACX(const T& self) {
 
   int bsz = self.size(0);
@@ -332,6 +393,10 @@ T getAtMACX(const T& self) {
   if (is3D) {
      idx_z = at::arange(1, d, options).view({1,d-1, 1 , 1}).expand({bsz,d-1,h-1,w-1}).toType(at::kLong);
   }
+
+  //std::cout << "idx_x  " <<  idx_x << std::endl;
+  //std::cout << "idx_y  " <<  idx_y << std::endl;
+  //std::cout << "idx_z  " <<  idx_z << std::endl;
 
   T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(idx_x.scalar_type());
   idx_b = idx_b.expand({bsz,d-1,h-1,w-1});
@@ -355,6 +420,165 @@ T getAtMACX(const T& self) {
  
   return at::stack({v_x, v_y, v_z}, 1);
 }
+
+// Temporary get MAC
+//
+
+T getAtMACX_temp(const T& self) {
+
+  int bsz = self.size(0);
+  int d = self.size(2) ;
+  int h = self.size(3);
+  int w = self.size(4);
+
+  auto options = self.options();
+
+  bool is3D = (d > 1);
+  d = is3D? (d-1): 2;
+  //h -= 1;
+  //w -= 1;
+
+
+  T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_y = at::arange(0, h, options).view({1,h, 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_z = at::zeros_like(idx_x);
+  if (is3D) {
+     idx_z = at::arange(1, d, options).view({1,d, 1 , 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  }
+
+  T mns_one = at::ones_like(idx_x); // Floating zero
+
+  T idx_x_new = idx_x.where(idx_x<w-1,(idx_x-(w*mns_one)));
+  T idx_y_new = idx_y.where(idx_y<h-1,(idx_y-(h*mns_one)));
+  T idx_z_new = idx_z.where(idx_z<d,(idx_z-(d*mns_one)));
+
+
+  std::cout << "idx_x  " <<  idx_x_new << std::endl;
+  std::cout << "idx_y  " <<  idx_y_new << std::endl;
+  std::cout << "idx_z  " <<  idx_z_new << std::endl;
+
+  T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(idx_x.scalar_type());
+  idx_b = idx_b.expand({bsz,d,h,w});
+
+  T idx_c = at::arange(0, 3, options).view({1,3,1,1,1}).toType(idx_x.scalar_type());
+
+  T v_x = self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new  ,idx_x_new  });
+
+  T v_y = 0.25 * (self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y_new  ,idx_x_new  }) +
+                  self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y_new  ,idx_x_new-1}) +
+                  self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y_new+1,idx_x_new  }) +
+                  self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y_new+1,idx_x_new-1}) );
+  T v_z = at::zeros_like(v_x);
+
+  if (is3D) {
+    T v_y = 0.25 * (self.index({idx_b,idx_c.select(1,2) ,idx_z  ,idx_y  ,idx_x  }) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z  ,idx_y  ,idx_x-1}) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z+1,idx_y  ,idx_x  }) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z+1,idx_y  ,idx_x-1}) );
+  }
+
+  return at::stack({v_x, v_y, v_z}, 1);
+}
+
+T getAtMACY_temp(const T& self) {
+
+  int bsz = self.size(0);
+  int d = self.size(2) ;
+  int h = self.size(3);
+  int w = self.size(4);
+
+  auto options = self.options();
+
+  bool is3D = (d > 1);
+  d = is3D? (d-1): 2;
+  //h -= 1;
+  //w -= 1;
+
+  T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_y = at::arange(0, h, options).view({1,h, 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_z = at::zeros_like(idx_x);
+  if (is3D) {
+     idx_z = at::arange(1, d, options).view({1,d, 1 , 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  }
+
+  T mns_one = at::ones_like(idx_x); // Floating zero
+
+  T idx_x_new = idx_x.where(idx_x<w-1,(idx_x-(w*mns_one)));
+  T idx_y_new = idx_y.where(idx_y<h-1,(idx_y-(h*mns_one)));
+  T idx_z_new = idx_z.where(idx_z<d,(idx_z-(d*mns_one)));
+
+
+  T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(idx_x.scalar_type());
+  idx_b = idx_b.expand({bsz,d,h,w});
+
+  T idx_c = at::arange(0, 3, options).view({1,3,1,1,1}).toType(idx_x.scalar_type());
+
+  T v_x = 0.25 * (self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new  ,idx_x_new  }) +
+                  self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new-1,idx_x_new  }) +
+                  self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new  ,idx_x_new+1}) +
+                  self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y_new-1,idx_x_new+1}) );
+
+  T v_y = self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y  ,idx_x  });
+
+  T v_z = at::zeros_like(v_x);
+  
+  if (is3D) {
+    T v_y = 0.25 * (self.index({idx_b,idx_c.select(1,2) ,idx_z  ,idx_y  ,idx_x  }) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z  ,idx_y-1,idx_x  }) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z+1,idx_y  ,idx_x  }) +
+                    self.index({idx_b,idx_c.select(1,2) ,idx_z+1,idx_y-1,idx_x  }) );
+  }
+
+  return at::stack({v_x, v_y, v_z}, 1);
+}
+
+
+T getAtMACZ_temp(const T& self) {
+
+  int bsz = self.size(0);
+  int d = self.size(2) ;
+  int h = self.size(3);
+  int w = self.size(4);
+
+  auto options = self.options();
+
+  bool is3D = (d > 1);
+  d = is3D? (d-1): 2;
+  //h -= 1;
+  //w -= 1;
+
+  T idx_x = at::arange(0, w, options).view({1,w}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_y = at::arange(0, h, options).view({1,h, 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  T idx_z = at::zeros_like(idx_x);
+  if (is3D) {
+     idx_z = at::arange(1, d, options).view({1,d, 1 , 1}).expand({bsz,d,h,w}).toType(at::kLong);
+  }
+
+  T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(idx_x.scalar_type());
+  idx_b = idx_b.expand({bsz,d,h,w});
+
+  T idx_c = at::arange(0, 3, options).view({1,3,1,1,1}).toType(idx_x.scalar_type());
+
+  T v_x = 0.25 * (self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y  ,idx_x  }) +
+                  self.index({idx_b,idx_c.select(1,0) ,idx_z-1,idx_y  ,idx_x  }) +
+                  self.index({idx_b,idx_c.select(1,0) ,idx_z  ,idx_y  ,idx_x+1}) +
+                  self.index({idx_b,idx_c.select(1,0) ,idx_z-1,idx_y  ,idx_x+1}) );
+
+  T v_y = 0.25 * (self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y  ,idx_x  }) +
+                  self.index({idx_b,idx_c.select(1,1) ,idx_z-1,idx_y  ,idx_x  }) +
+                  self.index({idx_b,idx_c.select(1,1) ,idx_z  ,idx_y+1,idx_x  }) +
+                  self.index({idx_b,idx_c.select(1,1) ,idx_z-1,idx_y+1,idx_x  }) );
+  T v_z = at::zeros_like(v_x);
+
+  if (is3D) {
+    T v_y = self.index({idx_b,idx_c.select(1,2) ,idx_z  ,idx_y  ,idx_x  });
+  }
+
+  return at::stack({v_x, v_y, v_z}, 1);
+}
+
+
+//
 
 T getAtMACY(const T& self) {
 
@@ -509,6 +733,104 @@ T interpolComponent(const T& self, const T& pos, int c) {
     return ( ((Ia*t0 + Ib*t1)*s0 + (Ic*t0 + Id*t1)*s1 ).unsqueeze(1) ); 
   }                         
 }                           
+
+// Ekhi Modification 06/08/2019
+// Exact copy of the previous interpolation, but trying to add periodicty
+//
+
+T interpolComponent_temp(const T& self, const T& pos, int c) {
+
+  AT_ASSERTM(pos.size(1) == 3, "Input pos must have 3 channels");
+
+  bool is3D = (self.size(2) > 1);
+  int bsz = pos.size(0);
+  int d = pos.size(2);
+  int h = pos.size(3);
+  int w = pos.size(4);
+
+  auto options = self.options();
+
+  // 0.5 is defined as the center of the first cell as the scheme shows:
+  //   |----x----|----x----|----x----|
+  //  x=0  0.5   1   1.5   2   2.5   3
+  T p = pos - 0.5;
+
+  // Cast to integer, truncates towards 0.
+  T pos0 = p.toType(at::kLong);
+
+  T s1 = p.select(1,0) - pos0.select(1,0).toType(self.scalar_type());
+  T t1 = p.select(1,1) - pos0.select(1,1).toType(self.scalar_type());
+  T f1 = p.select(1,2) - pos0.select(1,2).toType(self.scalar_type());
+  T s0 = 1 - s1;
+  T t0 = 1 - t1;
+  T f0 = 1 - f1;
+
+  T x0 = pos0.select(1,0);
+  T y0 = pos0.select(1,1);
+  T z0 = pos0.select(1,2);
+  //T x0 = pos0.select(1,0).clamp_(-1, self.size(4) -2);
+  //T y0 = pos0.select(1,1).clamp_(-1, self.size(3) -2);
+  //T z0 = pos0.select(1,2).clamp_(-1, self.size(2) -2);
+
+  // We avoid the clamping so that if we go interpolating
+  // to the right we go to the value on the left (-1)
+  T mns_one = at::ones_like(x0); // Floating zero
+
+  T x_new = x0.where(x0<self.size(4) -1,(x0-(self.size(4))*mns_one));
+  T y_new = y0.where(y0<self.size(3) -1,(y0-(self.size(3))*mns_one));
+  T z_new = z0.where(z0<self.size(2),(z0-(self.size(2))*mns_one));
+
+  //std::cout << "x_new  " <<  x_new << std::endl;
+  //std::cout << "y_new  " <<  y_new << std::endl;
+  //std::cout << "z_new  " <<  z_new << std::endl;
+
+  T idx_b = at::arange(0, bsz, options).view({bsz,1,1,1}).toType(x0.scalar_type());
+  idx_b = idx_b.expand({bsz,d,h,w});
+
+  T idx_c = at::arange(0, 3, options).view({1,3,1,1,1}).toType(pos0.scalar_type());
+
+  s1.clamp_(0, 1);
+  t1.clamp_(0, 1);
+  f1.clamp_(0, 1);
+  s0.clamp_(0, 1);
+  t0.clamp_(0, 1);
+  f0.clamp_(0, 1);
+
+  //std::cout << "End of clamping  " << std::endl;
+
+
+
+  if (is3D) {
+   T Ia= self.index({idx_b, idx_c.select(1,c), z0  , y0  , x0  });
+   T Ib= self.index({idx_b, idx_c.select(1,c), z0  , y0+1, x0  });
+   T Ic= self.index({idx_b, idx_c.select(1,c), z0  , y0  , x0+1});
+   T Id= self.index({idx_b, idx_c.select(1,c), z0  , y0+1, x0+1});
+   T Ie= self.index({idx_b, idx_c.select(1,c), z0+1, y0  , x0  });
+   T If= self.index({idx_b, idx_c.select(1,c), z0+1, y0+1, x0  });
+   T Ig= self.index({idx_b, idx_c.select(1,c), z0+1, y0  , x0+1});
+   T Ih= self.index({idx_b, idx_c.select(1,c), z0+1, y0+1, x0+1});
+
+    return ( (((Ia*t0 + Ib*t1)*s0 + (Ic*t0 + Id*t1)*s1)*f0 +
+             ((Ie*t0 + If*t1)*s0 + (Ig*t0 + Ih*t1)*s1)*f1 ).unsqueeze(1) );
+  } else {
+
+   T Ia= self.index({idx_b, idx_c.select(1,c), z0  , y_new  , x_new  });
+   T Ib= self.index({idx_b, idx_c.select(1,c), z0  , y_new+1, x_new  });
+   T Ic= self.index({idx_b, idx_c.select(1,c), z0  , y_new  , x_new+1});
+   T Id= self.index({idx_b, idx_c.select(1,c), z0  , y_new+1, x_new+1});
+
+   //T Ia= self.index({idx_b, idx_c.select(1,c), z0  , y0  , x0  });
+   //T Ib= self.index({idx_b, idx_c.select(1,c), z0  , y0+1, x0  });
+   //T Ic= self.index({idx_b, idx_c.select(1,c), z0  , y0  , x0+1});
+   //T Id= self.index({idx_b, idx_c.select(1,c), z0  , y0+1, x0+1});
+
+   //std::cout << "I bet here is the problem  " << std::endl;
+
+    return ( ((Ia*t0 + Ib*t1)*s0 + (Ic*t0 + Id*t1)*s1 ).unsqueeze(1) );
+  }
+}
+
+// End of new interpol
 
 T curl(const T& self) {
   AT_ASSERTM(self.size(1) == 3, "Input velocity field must have 3 channels");
