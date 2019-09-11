@@ -17,7 +17,7 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/Debug_perio_Ux_NoW_NewNor"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/Variable_Density_002"
 # simMethod: choose convnet or jacobi
 simMethod: "jacobi"
 # modelDir : location of trained model
@@ -25,11 +25,11 @@ modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
-dt: 0.025
+dt: 0.25
 # statIter : iterations frequency for output
-statIter: 20
+statIter: 1
 # maxIter : maximum number of simulation iterations
-maxIter: 2000 
+maxIter: 200 
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -43,7 +43,7 @@ maccormackStrength: 0.6
 # rho_0 being the average density and delta_rho local difference of density
 # w.r.t average density.
 # Mantaflow calls (1) gravity and (2) buoyancy and allows for different g's 
-buoyancyScale: 40.
+buoyancyScale: 10.
 gravityScale: 0.
 # Introduces a correcting factor in the denisty equation 
 # from "A splitting method for incompressible flows with variable
@@ -60,7 +60,7 @@ operatingDensity: 0.0
 # pTol : convergence criterion for Jacobi method
 pTol: 0.0
 # jacobiIter : maximum number of iterations for Jacobi method
-jacobiIter: 400
+jacobiIter: 300
 # gravityVec : orientation of the gravity vector when buoyancy/gravity 
 # are present.
 gravityVec:
@@ -68,8 +68,8 @@ gravityVec:
     y:  1.0
     z:  0.0
 # Rayleigh Taylor parameters
-rho2: 0.5
-rho1: -0.5
+rho2: 0.1
+rho1: -0.1
 perturbThickness: 100 # 20 = Thick !, 500 = Thin!
 perturbAmplitude: 0.01
 height: 0.5

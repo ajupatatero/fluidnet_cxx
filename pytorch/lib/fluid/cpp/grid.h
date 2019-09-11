@@ -17,12 +17,18 @@ void interpol1DWithFluid(
 T interpolWithFluid(const T& self, const T& flags, const T& pos);
 
 T getCentered(const T& self);
+T getCentered_temp(const T& self);
 
 T getAtMACX(const T& self);
 T getAtMACY(const T& self);
 T getAtMACZ(const T& self);
 
+T getAtMACX_temp(const T& self);
+T getAtMACY_temp(const T& self);
+T getAtMACZ_temp(const T& self);
+
 T interpolComponent(const T& self, const T& pos, int c);
+T interpolComponent_temp(const T& self, const T& pos, int c);
 
 T curl(const T& self);
 

@@ -19,9 +19,9 @@ realTimePlot: false
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
 #outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Tresh_Mix/Cyl_Test_09_06_Jacobi_1_DoubleT"
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Debug_PCG/Test_10_06/First"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Parabolic_Test/0001"
 # simMethod: choose convnet or jacobi or PCG
-simMethod: "PCG"
+simMethod: "jacobi"
 # modelDir : location of trained model
 modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 #modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/trained_models/ScaleNet_ShortTerm_LongTermLoss"
@@ -65,7 +65,7 @@ operatingDensity: 0.0
 # pTol : convergence criterion for Jacobi method
 pTol: 0.00
 # jacobiIter : maximum number of iterations for Jacobi method
-jacobiIter: 1
+jacobiIter: 200
 # gravityVec : orientation of the gravity vector when buoyancy/gravity 
 # are present.
 gravityVec:

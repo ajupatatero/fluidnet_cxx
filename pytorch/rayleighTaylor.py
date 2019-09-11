@@ -169,7 +169,7 @@ try:
         rho1 = mconf['rho1']
         rho2 = mconf['rho2']
 
-        mconf['periodic-y'] = True   
+        mconf['periodic-y'] = True  
         mconf['periodic-x'] = False
 
         net = model_saved.FluidNet(mconf, it, dropout=False)
@@ -184,7 +184,6 @@ try:
         print('Creating initial conditions')
         fluid.createRayleighTaylorBCs(batch_dict, mconf, rho1=rho1, rho2=rho2)
         # If restarting, overwrite all fields with checkpoint.
-
         # Periodic Density
 
         #density_p = batch_dict['density'].clone()
@@ -200,6 +199,7 @@ try:
         #####
 
         density_b =  batch_dict['density'].clone()
+
         rho_avga = torch.mean(density_b).item()
         print("Avg rho 1 = " + str(rho_avga))
 
@@ -277,7 +277,7 @@ try:
             density_c =  batch_dict['density'].clone()
             rho_avgc = torch.mean(density_c).item()
             print("Avg rho 2 = " + str(rho_avgc))
-
+        
             #Time Vec Declaration
             Time_vec = np.zeros(max_iter)
             Time_Pres = np.zeros(max_iter)
@@ -292,6 +292,7 @@ try:
 
 
             method = mconf['simMethod']
+
             #lib.simulate(mconf, batch_dict, net, method, it)
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
 

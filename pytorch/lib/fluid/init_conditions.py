@@ -13,9 +13,9 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     """
 
     #Jet length (jl -a) 
-    jl = 7
+    jl = 4
     #Jet first cell point
-    a=5
+    a=1
     
     flags = batch_dict['flags']
     
@@ -190,6 +190,7 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     Y = torch.arange(0, resY, device=cuda).view(resY, 1).expand((1,resY,resX))
     coord = torch.cat((X,Y), dim=0).unsqueeze(0).unsqueeze(2)
 
+
     normalized_x = (coord[:,0].float()/np.float(resX-1))
     normalized_y = (coord[:,1].float()/np.float(resY-1))
 
@@ -202,10 +203,10 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     ampl = mconf['perturbAmplitude']
     h = mconf['height']
 
-    teta_cos = 2*math.pi*normalized_x
+    teta_cos = 2.0*math.pi*normalized_x
 
-    print("Nor x ", normalized_x[0,0,105,:])
-    print("Teta cos ", teta_cos[0,0,105,:])
+    #print("Nor x ", normalized_x[0,0,105,:])
+    #print("Teta cos ", teta_cos[0,0,105,:])
 
     #density = 0.5*(rho2+rho1 + (rho2-rho1)*torch.tanh(thick*((coord[:,1]/resY).float() - \
     #        (h + ampl*torch.cos(2*math.pi*(coord[:,0]/resX).float()))))).unsqueeze(1)
@@ -218,10 +219,12 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     print("top",  0.5*(rho2+rho1 + (rho2-rho1)*math.tanh(thick*( - \
             (h + ampl*math.cos(2*math.pi*(64/resX)))))))
 
-    print("density tensor", density[0,0,0,500:512, 1])
-    print("density tensor", density[0,0,0,0:10, -2])
+    #print("density tensor", density[0,0,0,500:512, 1])
+    #print("density tensor", density[0,0,0,0:10, -2])
     print("density", density.shape)
     print("height", h)
+
+    print("Density ", density[0,0,0,:,0])
 
     batch_dict['density'] = density
     batch_dict['flags'] = flags
