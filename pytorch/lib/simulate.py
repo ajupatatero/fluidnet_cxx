@@ -433,26 +433,13 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
         start = default_timer()
 
-        test = 1
-        if test > 0:
+        p, residual = fluid.solveLinearSystemJacobi( \
+                flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
+                max_iter=maxIter)
 
-            p, residual = fluid.solveLinearSystemJacobi_Density( \
-                    flags=flags, div=div, density=density, is_3d=is3D, p_tol=pTol, \
-                    max_iter=maxIter)
-
-            end = default_timer()
-            time=(end - start)
-            print("time ", time, "it ", it )
-
-        else:
-
-            p, residual = fluid.solveLinearSystemJacobi( \
-                    flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
-                    max_iter=maxIter)
-
-            end = default_timer()
-            time=(end - start)
-            print("time ", time, "it ", it )
+        end = default_timer()
+        time=(end - start)
+        print("time ", time, "it ", it )
 
         #Print Pressures
         #P_cpu = p.cpu()       
@@ -475,11 +462,27 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 #        print("U y -2 ", U[0,1,0,175:200,-2])
 #        print("U y -1 ", U[0,1,0,175:200,-1])
 
-        if test>0:
-            fluid.velocityUpdate_Density(pressure=p, U=U, flags=flags, density=density)
-        else:
+
+        # Chapuza n 1
+        # We add rho h to the pressure so that the velocity update includes the hydrostatic pressure
+
+        #p_tuned = p.clone()
+
+        #bsz = p.size(0)
+        #c = p.size(1)
+        #d = p.size(2)
+        #h = p.size(3)
+        #w =p.size(4)
+
+        #j = torch.arange(0, h, dtype=torch.float, device=cuda).view(1,h,1).expand(bsz,c,d, h, w)
+        #gravity_val = gravity[1].float()
+        
+        #p_tuned = p + density*gravity_val*j*dt
+
+        #p = p_tuned
+
             #fluid.velocityUpdate_Density(pressure=p, U=U, flags=flags, density=density)
-            fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+        fluid.velocityUpdate(pressure=p, U=U, flags=flags)
 
         # Final Check U 
 
