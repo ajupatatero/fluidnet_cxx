@@ -21,7 +21,7 @@ class FluidNetDataset(Dataset):
         self.n_threads = pr_n_threads # Num of threads to preprocess from .bin to .pt
 
         self.base_dir = self._get_base_dir(conf['dataDir'])
-        self.scenes_folders = sorted(glob.os.listdir(self.base_dir
+        self.scenes_folders = sorted(glob.os.listdir(self.base_dir))
 
         # Check number of scenes
         self.n_scenes = len(self.scenes_folders)
