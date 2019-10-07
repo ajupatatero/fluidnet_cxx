@@ -1,5 +1,7 @@
 #include "fluids_init.h"
 #include <torch/torch.h>
+#include <iostream>
+#include <chrono>
 
 namespace fluid {
 
@@ -1515,6 +1517,7 @@ std::vector<T> solveLinearSystemPCG
      const int max_iter = 1000,
      const bool verbose = false
 ) {
+        auto t_init_i = std::chrono::high_resolution_clock::now();
         auto options = div.options();
         
         //Debug Printing
@@ -1522,14 +1525,12 @@ std::vector<T> solveLinearSystemPCG
     
         // Check arguments.
         T p = zeros_like(flags);
-
         T mean_grid = ones_like(flags);
+    
+	    // Start with the output of the next iteration going to pressure.
+	    T cur_p = p;
+	
 
-            
-
-	// Start with the output of the next iteration going to pressure.
-	T cur_p = p;
-	        
         // Create the A_diagonal and A_next_i,  A_next_j, A_next_k
         
         T A_diag = zeros_like(flags);
@@ -1815,6 +1816,7 @@ std::vector<T> solveLinearSystemPCG
         
         T residual = div.clone();
 
+
         //dt
         //Debug Printing
         //std::cout << "Debug 7" << std::endl;
@@ -1840,8 +1842,29 @@ std::vector<T> solveLinearSystemPCG
         //Debug Printing
         //std::cout << "Debug 8" << std::endl;
 
+        bool mask[h][w];
+        bool isSmall;
+
+        auto t_init_b_i = std::chrono::high_resolution_clock::now();
+
         for( int batch=0; batch<bsz; batch = batch +1){
-        
+
+            // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
+            //bool mask[w][h];
+            for( int i = 0; i < w; i = i + 1 ) {
+                for( int j = 0; j < h; j = j + 1 ) {
+                    T Intermediate = flags[batch][0][0][j][i];
+                    float flag_val = Intermediate.item().to<float>();
+                    mask[j][i] = (flag_val < 2.0);
+                }
+            }
+
+        }
+        auto t_init_b_inter = std::chrono::high_resolution_clock::now();
+
+        for( int batch=0; batch<bsz; batch = batch +1){
+       
+            std::cout << "BATCH ------------------        :"<< batch << std::endl;   
             // Start with the output of the next iteration going to pressure.
             //T* cur_p = &p;
             //T* cur_p_prev = &p_prev;
@@ -1878,17 +1901,23 @@ std::vector<T> solveLinearSystemPCG
         
             //Debug Printing
 
-            //std::cout << "Debug 11" << std::endl;
         
 
             // for loop execution. Now we are in a 2D case ... we'll see later on the 3D implementation
-
+            //bool mask[w][h];
+            //for( int i = 0; i < w; i = i + 1 ) {
+            //    for( int j = 0; j < h; j = j + 1 ) {
+            //        T Intermediate = flags[batch][0][0][j][i];
+            //        float flag_val = Intermediate.item().to<float>();
+            //        mask[j][i] = (flag_val < 2.0);
+            //    }
+            //}
             for( int i = 0; i < w; i = i + 1 ) {
                 for( int j = 0; j < h; j = j + 1 ) {
 
-                   T Intermediate = flags[batch][0][0][j][i];
+                   /*T &Intermediate = flags[batch][0][0][j][i];
                    float flag_val = Intermediate.item().to<float>();
-                   bool isfluid = (flag_val < 2.0);
+                   bool isfluid = (flag_val < 2.0);*/
 
                    //std::cout << "flags " <<  flags[0][0][0][i][j]  << std::endl;
                    //std::cout << "A_fluid " <<  A_fluid[0][0][0][i][j]  << std::endl;
@@ -1912,14 +1941,33 @@ std::vector<T> solveLinearSystemPCG
                    //std::cout << "Precon i "<< i << "j " << j << ": "<< Precon[batch][0][0][i][j]  << std::endl;
 
                    //If the corresponding position is fluid: Algo from Bridson pg 65
-                   if (isfluid) {
+                   //if (isfluid) {
+                    if (mask[j][i]) {
+//                   if (flags[batch][0][0][j][i]<2) {
+//
+                       auto t_inside_1 = std::chrono::high_resolution_clock::now();
 
                        E_diag[batch][0][0][j][i] = A_diag[batch][0][0][j][i]
-                                                     -  (A_next_i[batch][0][0][j][i-1]*Precon[batch][0][0][j][i-1]).pow(2)
-                                                     -  (A_next_j[batch][0][0][j-1][i]*Precon[batch][0][0][j-1][i]).pow(2)
+                                                     -  ((A_next_i[batch][0][0][j][i-1]*Precon[batch][0][0][j][i-1])*
+                                                             (A_next_i[batch][0][0][j][i-1]*Precon[batch][0][0][j][i-1]))
+                                                     -  ((A_next_j[batch][0][0][j-1][i]*Precon[batch][0][0][j-1][i])*
+                                                             (A_next_j[batch][0][0][j-1][i]*Precon[batch][0][0][j-1][i]))
                                                      -  tau * (
-                                                            A_next_i[batch][0][0][j][i-1]*A_next_j[batch][0][0][j][i-1]*((Precon[batch][0][0][j][i-1]).pow(2))  + 
-                                                            A_next_j[batch][0][0][j-1][i]*A_next_i[batch][0][0][j-1][i]*((Precon[batch][0][0][j-1][i]).pow(2))   );
+                                                            A_next_i[batch][0][0][j][i-1]*A_next_j[batch][0][0][j][i-1]*
+                                                            ((Precon[batch][0][0][j][i-1])*(Precon[batch][0][0][j][i-1]))  +
+                                                            A_next_j[batch][0][0][j-1][i]*A_next_i[batch][0][0][j-1][i]*
+                                                            ((Precon[batch][0][0][j-1][i])*(Precon[batch][0][0][j-1][i]))   );
+
+                       auto t_inside_2 = std::chrono::high_resolution_clock::now();
+
+                       //E_diag[batch][0][0][j][i] = A_diag[batch][0][0][j][i]
+                       //                              -  (A_next_i[batch][0][0][j][i-1]*Precon[batch][0][0][j][i-1]).pow(2)
+                       //                              -  (A_next_j[batch][0][0][j-1][i]*Precon[batch][0][0][j-1][i]).pow(2)
+                       //                              -  tau * (
+                       //                                     A_next_i[batch][0][0][j][i-1]*A_next_j[batch][0][0][j][i-1]*((Precon[batch][0][0][j][i-1]).pow(2))  + 
+                       //                                     A_next_j[batch][0][0][j-1][i]*A_next_i[batch][0][0][j-1][i]*((Precon[batch][0][0][j-1][i]).pow(2))   );
+
+
 
 
                        //std::cout << "E diag i "<< i << "j " << j << ": "<< E_diag[batch][0][0][j][i]  << std::endl;
@@ -1932,24 +1980,66 @@ std::vector<T> solveLinearSystemPCG
                        //std::cout << "----------------------------------------------------------"<< std::endl;
 
                        // Chek if the value is too low (sec factor * diag). If so, E_Diag = A_diag
-                       T Inter_1 = E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i];
+                       //int Inter_1 = static_cast<int>( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]);
 
+
+                       auto t_inside_25 = std::chrono::high_resolution_clock::now();
                        //std::cout << "E diagonal i "<< i << "j " << j << ": "<< E_diag[batch][0][0][i][j]  << std::endl;
-                  
+                                        //T tensor_eq = at::le(( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]),0);
+                       //isSmall = at::any(tensor_eq);
+                       //std::cout << "Le  -------- "<< ( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]) << std::endl;
+                       //std::cout << "tensor_eq  -------- "<< at::le(( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]),3) << std::endl;
+                       //std::cout << "Diag_value  -------- "<< Diag_value << std::endl;
+                       //std::cout << "isSmall  -------- "<< at::any(tensor_eq) << std::endl;
+
+                       auto t_inside_3 = std::chrono::high_resolution_clock::now();
+
+                       //if ( isSmall) {
+                       //    E_diag[batch][0][0][j][i] = A_diag[batch][0][0][j][i];
+                       // }
+
+                       //isSmall=(at::le(( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]),0)).eq(1);
+
+                       //std::cout << "Lesser  -------- "<< ( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]) << std::endl;
+
+
+                       //E_diag[batch][0][0][j][i] = E_diag[batch][0][0][j][i].where( at::ge(( E_diag[batch][0][0][j][i] - at::prod(A_diag[batch][0][0][j][i],Safety)),0), A_diag[batch][0][0][j][i]);
+
+                       //std::cout << "A diag  -------- "<< A_diag[batch][0][0][j][i] << std::endl;
+                       //std::cout << "E diag  -------- "<< E_diag[batch][0][0][j][i] << std::endl;
+
+                       T Inter_1 = ( E_diag[batch][0][0][j][i] - Safety * A_diag[batch][0][0][j][i]);
                        float Diag_value = Inter_1.item().to<float>();
                        bool isSmall = (Diag_value < 0);
-                       if ( isSmall) {
+
+                       if (isSmall) {
                            E_diag[batch][0][0][j][i] = A_diag[batch][0][0][j][i];
                         }
 
-               
+                       auto t_inside_4 = std::chrono::high_resolution_clock::now();
+
                        //Finally, the precondtionner will be equal to 1/sqrt(E)
                        Precon[batch][0][0][j][i]= 1 / ((E_diag[batch][0][0][j][i]).pow(0.5));
+
+                       auto t_inside_5 = std::chrono::high_resolution_clock::now();
+
+                       auto duration_inside_1 = std::chrono::duration_cast<std::chrono::microseconds>( t_inside_2 - t_inside_1 ).count();
+                       auto duration_inside_2 = std::chrono::duration_cast<std::chrono::microseconds>( t_inside_25 - t_inside_2 ).count();
+                       auto duration_inside_25 = std::chrono::duration_cast<std::chrono::microseconds>( t_inside_3 - t_inside_25 ).count();
+                       auto duration_inside_3 = std::chrono::duration_cast<std::chrono::microseconds>( t_inside_4 - t_inside_3 ).count();
+                       auto duration_inside_4 = std::chrono::duration_cast<std::chrono::microseconds>( t_inside_5 - t_inside_4 ).count();
+
+                       std::cout << "Duration inside  Boucle 1 -------- "<< duration_inside_1 << std::endl;
+                       std::cout << "Duration inside  Boucle 2 -------- "<< duration_inside_2 << std::endl;
+                       std::cout << "Duration inside  Boucle 25 -------- "<< duration_inside_25 << std::endl;
+                       std::cout << "Duration inside  Boucle 3 -------- "<< duration_inside_3 << std::endl;
+                       std::cout << "Duration inside  Boucle 4 -------- "<< duration_inside_4 << std::endl;
 
                        //std::cout << "Precon i "<< i << "j " << j << ": "<< Precon[batch][0][0][j][i]  << std::endl;
                    }
                 }
             }
+            auto t_init_b_f = std::chrono::high_resolution_clock::now();
 
             //Debug Printing
 
@@ -1978,7 +2068,6 @@ std::vector<T> solveLinearSystemPCG
             T s = z.clone();
             //T s = residual.clone();
             //std::cout << "s ==> : "<< s  << std::endl;
-
             //std::cout << "z init " << (z.sum()).item().to<float>()  << std::endl;
 
       
@@ -2051,6 +2140,14 @@ std::vector<T> solveLinearSystemPCG
             // It will run until the residual  is too small        
             int64_t iter = 0;
 
+            auto t_init_f = std::chrono::high_resolution_clock::now();
+            auto duration_init = std::chrono::duration_cast<std::chrono::microseconds>( t_init_f - t_init_i ).count();
+            auto duration_init_inter = std::chrono::duration_cast<std::chrono::microseconds>( t_init_b_inter - t_init_b_i ).count();
+            auto duration_init_b = std::chrono::duration_cast<std::chrono::microseconds>( t_init_b_f - t_init_b_i ).count();
+            //std::cout << "Duration 3 "<< duration_3 << std::endl
+            std::cout << "Duration INIT  -------- "<< duration_init << std::endl;
+            std::cout << "Duration INIT  Boucle -------- "<< duration_init_b << std::endl;
+            std::cout << "Duration INIT  Mask Boucle -------- "<< duration_init_inter << std::endl;
             //Debug Printing
             //            
             //std::cout << "Debug 15" << std::endl;
@@ -2091,28 +2188,46 @@ std::vector<T> solveLinearSystemPCG
                 //std::cout << "Precon i "<< Precon  << std::endl;
 
 
+                auto t0 = std::chrono::high_resolution_clock::now();
+
                 for( int i = 0; i < w; i = i + 1 ) {
                    for( int j = 0; j < h; j = j + 1 ) {
 
-                       T Intermediate = flags[batch][0][0][j][i];
+                       //auto t1 = std::chrono::high_resolution_clock::now();
+
+                       /*T Intermediate = flags[batch][0][0][j][i];
                        float flag_val = Intermediate.item().to<float>();
-                       bool isfluid = (flag_val < 2.0);
+                       bool isfluid = (flag_val < 2.0);*/
 
-                       if (isfluid) {
+                       //auto t2 = std::chrono::high_resolution_clock::now();
 
+                       if(mask[j][i]){
+
+                           //auto t3 = std::chrono::high_resolution_clock::now();
                            W[batch][0][0][j][i] = (A_diag[batch][0][0][j][i]*s[batch][0][0][j][i]) + 
                                     (A_next_i[batch][0][0][j][i-1]*s[batch][0][0][j][i-1]) +(A_next_i[batch][0][0][j][i]*s[batch][0][0][j][i+1])+
                                     (A_next_j[batch][0][0][j-1][i]*s[batch][0][0][j-1][i]) + (A_next_j[batch][0][0][j][i]*s[batch][0][0][j+1][i]);
 
+                           //auto t4 = std::chrono::high_resolution_clock::now();
                            //std::cout << "W "<< i << "j " << j << ": "<< W[0][0][0][j][i]  << std::endl;
                            //std::cout << "Sum i "<< i << "j " << j << ": "<< (A_diag[batch][0][0][j][i]*S_diag).sum() << std::endl;
                            //std::cout << "S diag i "<< i << "j " << j << ": "<< S_diag[0][0][0][j][i]  << std::endl;
                            //std::cout << "S_minus_i i "<< i << "j " << j << ": "<< S_minus_i[0][0][0][j][i]  << std::endl;
                            //std::cout << "S_minus_j i "<< i << "j " << j << ": "<< S_minus_j[0][0][0][j][i]  << std::endl;                         
- 
+
+                           //auto duration_1 = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count(); 
+                           //auto duration_2 = std::chrono::duration_cast<std::chrono::microseconds>( t3 - t2 ).count();
+                           //auto duration_3 = std::chrono::duration_cast<std::chrono::microseconds>( t4 - t3 ).count();
+                           //std::cout << "Duration 1 "<< duration_1 << std::endl; 
+                           //std::cout << "Duration 2 "<< duration_2 << std::endl;
+                           //std::cout << "Duration 3 "<< duration_3 << std::endl;
                         }
                     }
                 }
+                auto t5 = std::chrono::high_resolution_clock::now();
+                auto duration_4 = std::chrono::duration_cast<std::chrono::microseconds>( t5 - t0 ).count();
+                //std::cout << "Duration 3 "<< duration_3 << std::endl
+                std::cout << "Duration 4    WHOLEEEEE BOUCLE !!!!!!!!!!!!!!!!! "<< duration_4 << std::endl;
 
                 //T W = A_diag*s + A_next_i*S_minus_i + A_next_i*S_plus_i + A_next_j*S_minus_j + A_next_j*S_plus_j; //!!!!!Implement
 

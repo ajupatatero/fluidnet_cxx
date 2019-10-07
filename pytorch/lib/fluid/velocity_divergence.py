@@ -80,6 +80,10 @@ def velocityDivergence(U, flags):
     mask_obst = flags.eq(CellType.TypeObstacle)
     divergence.masked_fill_(mask_obst, 0)
 
+    # Chapuza BC
+    #divergence[:,:,:,-2,:]=torch.zeros_like(divergence[:,:,:,-2,:])
+    #divergence[:,:,:,1,:]=torch.zeros_like(divergence[:,:,:,1,:])
+
     #print("Corrected Divergence: ", divergence)
     return divergence
 

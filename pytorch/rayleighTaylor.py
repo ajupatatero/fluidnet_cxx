@@ -144,8 +144,10 @@ try:
 
         p =       torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         U =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
+        Ustar =   torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
         flags =   torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         density = torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
+        div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
 
         fluid.emptyDomain(flags)
 
@@ -157,6 +159,8 @@ try:
         batch_dict['U'] = U
         batch_dict['flags'] = flags
         batch_dict['density'] = density
+        batch_dict['Ustar'] = Ustar
+        batch_dict['Div_in']= div_input
 
         real_time = simConf['realTimePlot']
         save_vtk = simConf['saveVTK']
@@ -169,7 +173,7 @@ try:
         rho1 = mconf['rho1']
         rho2 = mconf['rho2']
 
-        mconf['periodic-y'] = True  
+        mconf['periodic-y'] = False 
         mconf['periodic-x'] = False
 
         net = model_saved.FluidNet(mconf, it, dropout=False)
@@ -322,6 +326,7 @@ try:
                 print("It = " + str(it))
                 tensor_div = fluid.velocityDivergence(batch_dict['U'].clone(),
                         batch_dict['flags'].clone())
+                print("Div FINAL PRINTING :", (abs(tensor_div).max()).item())
                 pressure = batch_dict['p'].clone()
                 tensor_vel = fluid.getCentered(batch_dict['U'].clone())
 
@@ -421,52 +426,81 @@ try:
                     z = np.zeros(1, dtype='float32')
 
                     # Variables
+                    div_input = batch_dict['Div_in'][0,0].clone()
                     div = fluid.velocityDivergence(\
                         batch_dict['U'].clone(), \
                         batch_dict['flags'].clone())[0,0]
+                    velstar_div = fluid.velocityDivergence(\
+                        batch_dict['Ustar'].clone(), \
+                        batch_dict['flags'].clone())[0,0]
                     vel = fluid.getCentered(batch_dict['U'].clone())
+                    velstar = fluid.getCentered(batch_dict['Ustar'].clone())
                     density = batch_dict['density'][0,0].clone()
                     pressure = batch_dict['p'][0,0].clone()
                     velX = vel[0,0].clone()
                     velY = vel[0,1].clone()
+                    velstarX = velstar[0,0].clone()
+                    velstarY = velstar[0,1].clone()
                     flags = batch_dict['flags'][0,0].clone()
 
                     # Change shape form (D,H,W) to (W,H,D)
                     div.transpose_(0,2).contiguous()
+                    div_input.transpose_(0,2).contiguous()
+                    velstar_div.transpose_(0,2).contiguous()
                     density.transpose_(0,2).contiguous()
                     pressure.transpose_(0,2).contiguous()
                     velX.transpose_(0,2).contiguous()
                     velY.transpose_(0,2).contiguous()
+                    velstarX.transpose_(0,2).contiguous()
+                    velstarY.transpose_(0,2).contiguous()
                     flags.transpose_(0,2).contiguous()
 
                     div_np = div.cpu().data.numpy()
+                    div_input_np = div_input.cpu().data.numpy()
+                    velstardiv_np = velstar_div.cpu().numpy()
                     density_np = density.cpu().data.numpy()
                     pressure_np = pressure.cpu().data.numpy()
                     velX_np = velX.cpu().data.numpy()
                     velY_np = velY.cpu().data.numpy()
+                    velstarX_np = velstarX.cpu().data.numpy()
+                    velstarY_np = velstarY.cpu().data.numpy()
                     np_mask = flags.eq(2).cpu().data.numpy().astype(float)
                     pressure_masked = ma.array(pressure_np, mask=np_mask)
                     velx_masked = ma.array(velX_np, mask=np_mask)
                     vely_masked = ma.array(velY_np, mask=np_mask)
+                    velstarx_masked = ma.array(velstarX_np, mask=np_mask)
+                    velstary_masked = ma.array(velstarY_np, mask=np_mask)
                     ma.set_fill_value(pressure_masked, np.nan)
                     ma.set_fill_value(velx_masked, np.nan)
                     ma.set_fill_value(vely_masked, np.nan)
+                    ma.set_fill_value(velstarx_masked, np.nan)
+                    ma.set_fill_value(velstary_masked, np.nan)
                     pressure_masked = pressure_masked.filled()
                     velx_masked = velx_masked.filled()
                     vely_masked = vely_masked.filled()
+                    velstarx_masked = velstarx_masked.filled()
+                    velstary_masked = velstary_masked.filled()
 
                     divergence = np.ascontiguousarray(div_np[minX:maxX,minY:maxY])
+                    divergence_input=np.ascontiguousarray(div_input_np[minX:maxX,minY:maxY])
                     rho = np.ascontiguousarray(density_np[minX:maxX,minY:maxY])
                     p = np.ascontiguousarray(pressure_masked[minX:maxX,minY:maxY])
                     velx = np.ascontiguousarray(velx_masked[minX:maxX,minY:maxY])
                     vely = np.ascontiguousarray(vely_masked[minX:maxX,minY:maxY])
+                    velstarx = np.ascontiguousarray(velstarx_masked[minX:maxX,minY:maxY])
+                    velstary = np.ascontiguousarray(velstary_masked[minX:maxX,minY:maxY])
+                    velstardiv = np.ascontiguousarray(velstardiv_np[minX:maxX,minY:maxY])
                     filename = folder + '/output_{0:05}'.format(it)
                     vtk.gridToVTK(filename, x, y, z, cellData = {
                         'density': rho,
                         'divergence': divergence,
                         'pressure' : p,
                         'ux' : velx,
-                        'uy' : vely
+                        'uy' : vely,
+                        'u_star_x' : velstarx,
+                        'u_star_y' : velstary,
+                        'u_star_div' : velstardiv,
+                        'divergence_input': divergence_input,
                         })
 
                     restart_dict = {'batch_dict': batch_dict, 'it': it}
