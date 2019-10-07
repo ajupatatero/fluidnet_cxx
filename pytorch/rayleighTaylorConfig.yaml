@@ -17,9 +17,9 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/Source_2"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/DEBUG_PCG_TIMER"
 # simMethod: choose convnet or jacobi
-simMethod: "jacobi"
+simMethod: "PCG"
 # modelDir : location of trained model
 modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
@@ -27,9 +27,9 @@ modelFilename: "convModel"
 # dt : simualation timestep
 dt: 0.05
 # statIter : iterations frequency for output
-statIter: 10
+statIter: 1
 # maxIter : maximum number of simulation iterations
-maxIter: 1000 
+maxIter: 10
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -77,5 +77,5 @@ height: 0.5
 #If True we will update the divergency outside the Box!
 outside_Ja: False
 #Threshold for the Jacobi its
-threshold_Div: 1.e-3
+threshold_Div: 1.e-4
 
