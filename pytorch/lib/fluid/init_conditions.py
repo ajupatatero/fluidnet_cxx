@@ -122,6 +122,139 @@ def createVKBCs(batch_dict, density_val, u_scale, rad):
     batch_dict['densityBC'] = densityBC
     batch_dict['densityBCInvMask'] = densityBCInvMask
 
+def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
+    r"""Creates masks to enforce an inlet at the domain bottom wall.
+    Modifies batch_dict inplace.
+    Arguments:
+        batch_dict (dict): Input tensors (p, UDiv, flags, density)
+        density_val (float): Inlet density.
+        u_scale (float); Inlet velocity.
+        rad (float): radius of inlet circle (centered around midpoint of wall)
+    """
+
+    #Jet length (jl -a) 
+    jl = 4
+    #Jet first cell point
+    a=1
+
+    flags = batch_dict['flags']
+
+    cuda = torch.device('cuda')
+    # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input}
+    assert len(batch_dict) == 6, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
+    UDiv = batch_dict['U']
+    density = batch_dict['density']
+    UBC = UDiv.clone().fill_(0)
+    UBCInvMask = UDiv.clone().fill_(1)
+
+    # Single density value
+    densityBC = density.clone().fill_(0)
+    densityBCInvMask = density.clone().fill_(1)
+
+    assert UBC.dim() == 5, 'UBC must have 5 dimensions'
+    assert UBC.size(0) == 1, 'Only single batches allowed (inference)'
+
+    xdim = UBC.size(4)
+    ydim = UBC.size(3)
+    zdim = UBC.size(2)
+    is3D = (UBC.size(1) == 3)
+
+    if not is3D:
+        assert zdim == 1, 'For 2D, zdim must be 1'
+    centerX = xdim // 2
+    centerZ = max( zdim // 2, 1.0)
+    #Remember that floor (5.6 = 5, -7.1 = -7)
+    plumeRad = math.floor(xdim*rad)
+
+    y = 1
+    if (not is3D):
+        #vec = (0,1)
+        vec = torch.arange(0,2, device=cuda).float()
+    else:
+        vec = torch.arange(0,3, device=cuda).float()
+        vec[2] = 0
+
+    # vec = vec * u_scale (vinj)
+    vec.mul_(u_scale)
+    print("V INJ = ", vec[1])
+    print("Scale", u_scale)
+
+    # Equal to = vector size H, then reshaped to a matrix of size (H,1) and expanded
+    index_x = torch.arange(0, xdim, device=cuda).view(xdim).expand_as(density[0][0])
+    index_y = torch.arange(0, ydim, device=cuda).view(ydim, 1).expand_as(density[0][0])
+    if (is3D):
+        index_z = torch.arange(0, zdim, device=cuda).view(zdim, 1, 1).expand_as(density[0][0])
+
+    if (not is3D):
+        index_ten = torch.stack((index_x, index_y), dim=0)
+    else:
+        index_ten = torch.stack((index_x, index_y, index_z), dim=0)
+
+    #TODO 3d implementation
+    indx_circle = index_ten[:,:,a:jl]
+    maskInside = (indx_circle[1] <= jl)
+
+    # Inside the plume. Set the BCs.
+
+    #It is clearer to just multiply by mask (casted into Float)
+    maskInside_f = maskInside.float().clone()
+
+    #DEBUG
+    UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
+    #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
+    UBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
+
+    densityBC[:,:,:,a:jl].masked_fill_(maskInside, density_val)
+    densityBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
+
+    # Outside the plume. Set the velocity to zero and leave density alone.
+
+    maskOutside = (maskInside == 0)
+    UBC[:,:,:,a:jl].masked_fill_(maskOutside, 0)
+    UBC[:,:,:,a:jl].masked_fill_(maskOutside, 0)
+    UBCInvMask[:,:,:,a:jl].masked_fill_(maskOutside, 0)
+
+    #Outflow
+
+
+    indx_circle = index_ten[:,:,-jl:]
+    maskInside = (indx_circle[1] >= ydim-jl)
+
+    # Inside the plume. Set the BCs.
+
+    #It is clearer to just multiply by mask (casted into Float)
+    maskInside_f = maskInside.float().clone()
+
+    #DEBUG
+    UBC[:,:,:,-jl:] = maskInside_f * (vec.view(1,2,1,1,1)*((resX-Long_S_X)/resX)).expand_as(UBC[:,:,:,-jl:]).float()
+    #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
+    UBCInvMask[:,:,:,-jl:].masked_fill_(maskInside, 0)
+    densityBCInvMask[:,:,:,-jl:].masked_fill_(maskInside, 0)
+
+    # Outside the plume. Set the velocity to zero and leave density alone.
+
+    maskOutside = (maskInside == 0)
+    UBC[:,:,:,-jl:].masked_fill_(maskOutside, 0)
+    UBCInvMask[:,:,:,-jl:].masked_fill_(maskOutside, 0)
+
+
+    print("Inflow X ", UBC[0,0,0,1,100])
+    print("Outflow X ", UBC[0,0,0,-1,100])
+
+    print("Inflow ", UBC[0,1,0,1,100])
+    print("Outflow ", UBC[0,1,0,-1,100])
+
+    # Insert the new tensors in the batch_dict.
+    batch_dict['UBC'] = UBC
+    batch_dict['UBCInvMask'] = UBCInvMask
+    batch_dict['densityBC'] = densityBC
+    batch_dict['densityBCInvMask'] = densityBCInvMask
+
+
+
+
+
+
 
 def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     r"""Creates masks to enforce an inlet at the domain bottom wall.
@@ -199,13 +332,22 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
 
     #It is clearer to just multiply by mask (casted into Float)
     maskInside_f = maskInside.float().clone()
-    
+   
+    # Tan H try:
+    delt = 5
+    ind_x = torch.arange(0, xdim).view(xdim).float()
+
+    UBC[:,1,:,a:jl] = maskInside_f * ((u_scale*0.25)*(torch.tanh(((ind_x[:])-((xdim/2)-plumeRad)-10)/10).cuda()+1)*\
+            (1-torch.tanh(((ind_x[:])-((xdim/2)+plumeRad)+10)/10).cuda())).expand_as(UBC[:,1,:,a:jl]).float()
+
     #DEBUG
-    UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
+    #UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
     #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
     UBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
 
-    densityBC[:,:,:,a:jl].masked_fill_(maskInside, density_val)
+    densityBC[:,:,:,a:jl] = maskInside_f * ((density_val*0.25)*(torch.tanh(((ind_x[:])-((xdim/2)-plumeRad)-10)/10).cuda()+1)*\
+            (1-torch.tanh(((ind_x[:])-((xdim/2)+plumeRad)+10)/10).cuda())).expand_as(densityBC[:,:,:,a:jl]).float()
+    #densityBC[:,:,:,a:jl].masked_fill_(maskInside, density_val)
     densityBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
 
     # Outside the plume. Set the velocity to zero and leave density alone.

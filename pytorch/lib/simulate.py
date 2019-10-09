@@ -508,6 +508,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             # Density peridoicty
             density_temp = density.clone()
         U = fluid.setWallBcs(U, flags)
+        setConstVals(batch_dict, p, U, flags, density)
+        U = batch_dict['U']
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             if mconf['periodic-x']:
                 U[:,1,:,:,1] = U_temp[:,1,:,:,U.size(4)-1]

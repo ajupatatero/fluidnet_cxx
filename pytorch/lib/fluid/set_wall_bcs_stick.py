@@ -4,6 +4,7 @@ from . import CellType
 
 def setWallBcsStick(U, flags, flags_stick):
 
+    print(" SET WALL BC STICK! ")
     cuda = torch.device('cuda')
     assert (U.dim() == 5 and flags.dim() == 5 and flags_stick.dim() == 5), 'Dimension mismatch'
     assert flags.size(1) == 1, 'flags is not a scalar'
