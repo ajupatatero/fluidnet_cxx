@@ -112,8 +112,6 @@ model_saved = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_saved)
 
 
-
-
 try:
     #te = lib.FluidNetDataset(conf, 'te', save_dt=4, resume=resume) # Test instance of custom Dataset
     mconf = {}
@@ -209,6 +207,11 @@ try:
 
         rho_avga = torch.mean(density_b).item()
         print("Avg rho 1 = " + str(rho_avga))
+
+
+        # Creation of Matrix A
+
+        A = fluid.createMatrixA(flags)
 
         if restart_sim:
             # Check if restart file exists in folder
