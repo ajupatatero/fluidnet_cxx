@@ -1,0 +1,25 @@
+cc1plus: warning: l'option de la ligne de commande « -Wstrict-prototypes » est valable pour C/ObjC mais pas pour C++
+In file included from fluids_init.cpp:2:
+/mnt/scratch/daep/e.ajuria/actiAntonio/lib/python3.7/site-packages/torch/include/torch/csrc/api/include/torch/torch.h:7:2: warning: #warning "Including torch/torch.h for C++ extensions is deprecated. Please include torch/extension.h" [-Wcpp]
+ #warning \
+  ^~~~~~~
+fluids_init.cpp: Dans la fonction « fluid::T fluid::ApplyOutflow(const T&, const T&, const T&, float, int) »:
+fluids_init.cpp:726:9: warning: variable « numel » inutilisée [-Wunused-variable]
+     int numel = d * h * w;
+         ^~~~~
+fluids_init.cpp: Dans la fonction « std::vector<at::Tensor> fluid::solveLinearSystemPCG(fluid::T, fluid::T, fluid::T, bool, float, int, bool) »:
+fluids_init.cpp:2006:35: error: impossible de convertir « at::any(const at::Tensor&)() » de « at::Tensor » vers « bool »
+                        if (at::any(tensor_eq)) {
+                            ~~~~~~~^~~~~~~~~~~
+fluids_init.cpp:2091:19: warning: variable « beta » inutilisée [-Wunused-variable]
+             float beta=0;
+                   ^~~~
+fluids_init.cpp:1558:21: warning: variable « dt » inutilisée [-Wunused-variable]
+         const float dt = 5;
+                     ^~
+fluids_init.cpp:1846:14: warning: variable « isSmall » inutilisée [-Wunused-variable]
+         bool isSmall;
+              ^~~~~~~
+fluids_init.cpp:1527:31: warning: le contrôle a atteint la fin d'une fonction non « void » [-Wreturn-type]
+         T p = zeros_like(flags);
+                               ^

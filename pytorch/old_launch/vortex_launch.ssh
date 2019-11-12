@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=Vortex_launcg
+#SBATCH --output=Vortex_launch.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --time=24:00:00
+#SBATCH --partition=gpu
+
+module load gcc/8.2.0
+source /scratch/daep/e.ajuria/actiAntonio/bin/activate
+python3 ./test_vortex.py -sC mconf_vortex.yaml -of "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Vortex/Vicuous_Big_Pert_F_Vortex_m_2_e_0p3_eps_2_rho_5_sf_0p01"  -rR -5 -evo 0.3 -ep 2 -vmod 2 -sf 0.01 -p False 
+

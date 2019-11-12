@@ -1,0 +1,98 @@
+# Configuration file for buoyant simulation.
+# The program overwrites parameters from conf and mconf dicts found
+# in <modelDir> (where the trained model is) with parameters found here.
+# They just impact the physics of the problem but leave the architecture
+# untouched. 
+# This table is saved to disk, in <outputFolder>, at every iteration and
+# is loaded when restarting a sim.
+# To restart precise <outputFolder> and set restartSim to true.
+
+# res : Resolution of domain
+resX: 512 
+resY: 512
+# restartSim : set to true to restart form checkpoint from outputFolder.
+restartSim: false
+# realTimePlot : set to true to plot results during simulation.
+realTimePlot: false
+# saveVTK : set to true to save results as structured VTK files
+# use Paraview to load those files.
+saveVTK: true
+# outputFolder : folder for storing results, checkpoints and config files
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Vortex/64x64"
+# simMethod: choose convnet or jacobi
+simMethod: "jacobi"
+# modelDir : location of trained model
+modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
+# modelFilename : name of trained model
+modelFilename: "convModel"
+# dt : simualation timestep
+dt: 0.01
+# statIter : iterations frequency for output
+statIter: 20
+# maxIter : maximum number of simulation iterations
+maxIter: 5000
+# maccormackStrength : used in semi-lagrangian MacCormack advection
+# when LT div is activated. 0.6 is a good value. If ~1, can lead to
+# high frequency artifacts.
+maccormackStrength: 0.6
+# buoyancyScale : Buoyancy forces scale
+# gravityScale : Gravity forces scale
+# Note: Manta and FluidNet divide gravity forces into "gravity" and "buoyancy"
+# They represent the two terms arising from Boussinesq approximation
+# rho*g = rho_0*g + delta_rho*g
+#           (1)         (2)
+# rho_0 being the average density and delta_rho local difference of density
+# w.r.t average density.
+# Mantaflow calls (1) gravity and (2) buoyancy and allows for different g's 
+buoyancyScale: !!python/float 0.0
+gravityScale: 0
+# Introduces a correcting factor in the denisty equation 
+# from "A splitting method for incompressible flows with variable
+# density based on a pressure Poisson equation" (Guermond, Salgado).
+# Not really tested... Recommendation is to leave it as false.
+correctScalar: false
+# viscosity : introduces a viscous term in moment equation.
+# Algortihm taken from the book "Fluid Simulation for Computer Graphics" by
+# Bridson
+viscosity: 1.0e-6
+# operatingDensity : When applying buoyancy, buoyancyScale is multiplied
+# by (density(i,j) - operatingDensity)
+operatingDensity: 0.0
+# pTol : convergence criterion for Jacobi method
+pTol: 0.00
+# jacobiIter : maximum number of iterations for Jacobi method
+jacobiIter: 200
+# gravityVec : orientation of the gravity vector when buoyancy/gravity 
+# are present.
+gravityVec:
+    x:  0.0
+    y: -1.0
+    z:  0.0
+# injectionDensity : density at buoyant plume inlet
+injectionDensity: 0.1
+# sourceRadius : radius of inlet zone w.r.t the center of x-axis
+sourceRadius: 0.145
+# injectionVelocity : inlet velocity
+injectionVelocity: 2
+#If True we will update the divergency outside the Box!
+outside_Ja: False
+##Threshold for the Jacobi its
+threshold_Div: 2.e-4
+#
+### Vortex Parameters!!
+#
+# Size factor for the vortex size
+sizefactor: 1
+# Main mode for the vortex
+vmode: 2
+# Vortex Epsilon
+epsilon: 1
+# Vortex e
+evortex: 0.3
+#Vortex Density Ratio
+rhoratio: 3
+# Vortex Center coordinates:
+cenX: 255
+cenY: 255
+# Field perturbation:
+pert: True

@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=Ja_100
+#SBATCH --output=Ja_100.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --time=24:00:00
+#SBATCH --partition=gpu
+
+module load gcc/8.2.0
+source /scratch/daep/e.ajuria/actiAntonio/bin/activate
+python3 ./plume.py --simConf plumeConfig_Ja100.yaml
+
+
+

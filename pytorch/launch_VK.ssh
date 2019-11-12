@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=VKJa_300
+#SBATCH --output=VK_Ja_300.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --time=24:00:00
+#SBATCH --partition=gpu
+#SBATCH --dependency=afterany:691727
+
+module load gcc/8.2.0
+source /scratch/daep/e.ajuria/actiAntonio/bin/activate
+CUDA_VISIBLE_DEVICES=1 python3 VK.py --simConf plumeConfig_VK.yaml
+
