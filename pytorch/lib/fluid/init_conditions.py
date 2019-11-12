@@ -269,7 +269,7 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     #Jet length (jl -a) 
     jl = 4
     #Jet first cell point
-    a=1
+    a=0
     
     flags = batch_dict['flags']
     
@@ -337,17 +337,17 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     delt = 5
     ind_x = torch.arange(0, xdim).view(xdim).float()
 
-    UBC[:,1,:,a:jl] = maskInside_f * ((u_scale*0.25)*(torch.tanh(((ind_x[:])-((xdim/2)-plumeRad)-10)/10).cuda()+1)*\
-            (1-torch.tanh(((ind_x[:])-((xdim/2)+plumeRad)+10)/10).cuda())).expand_as(UBC[:,1,:,a:jl]).float()
+    #UBC[:,1,:,a:jl] = maskInside_f * ((u_scale*0.25)*(torch.tanh(((ind_x[:])-((xdim/2)-plumeRad)-10)/10).cuda()+1)*\
+    #       (1-torch.tanh(((ind_x[:])-((xdim/2)+plumeRad)+10)/10).cuda())).expand_as(UBC[:,1,:,a:jl]).float()
 
     #DEBUG
-    #UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
+    UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
     #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
     UBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
 
-    densityBC[:,:,:,a:jl] = maskInside_f * ((density_val*0.25)*(torch.tanh(((ind_x[:])-((xdim/2)-plumeRad)-10)/10).cuda()+1)*\
-            (1-torch.tanh(((ind_x[:])-((xdim/2)+plumeRad)+10)/10).cuda())).expand_as(densityBC[:,:,:,a:jl]).float()
-    #densityBC[:,:,:,a:jl].masked_fill_(maskInside, density_val)
+    #densityBC[:,:,:,a:jl] = maskInside_f * ((density_val*0.25)*(torch.tanh(((ind_x[:])-((xdim/2)-plumeRad)-10)/10).cuda()+1)*\
+    #        (1-torch.tanh(((ind_x[:])-((xdim/2)+plumeRad)+10)/10).cuda())).expand_as(densityBC[:,:,:,a:jl]).float()
+    densityBC[:,:,:,a:jl].masked_fill_(maskInside, density_val)
     densityBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
 
     # Outside the plume. Set the velocity to zero and leave density alone.

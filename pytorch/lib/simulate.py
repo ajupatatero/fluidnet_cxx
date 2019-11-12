@@ -36,6 +36,7 @@ def setConstVals(batch_dict, p, U, flags, density):
         new_nor = (((normalized_x).unsqueeze(0)).unsqueeze(0)).unsqueeze(0)
         nor_2 = new_nor.expand_as(U[:,1,:,1:4,firstX:lastX])
 
+        U[:,:,:,1:4,:]=0
         U.mul_(batch_dict['densityBCInvMask'])
         # Add back the values we want to specify.
 
@@ -49,7 +50,8 @@ def setConstVals(batch_dict, p, U, flags, density):
 
     if ('densityBCInvMask' in batch_dict) and ('densityBC' in batch_dict):
         Mask = batch_dict['densityBCInvMask']
-        #print(" densityBCInvMask ", Mask[0,0,0,:,0:2])
+        #print(" densityBCInvMask ", Mask[0,0,0,0:2,:])
+        density[:,:,:,1:4,:]=0
         density.mul_(batch_dict['densityBCInvMask'])
         density.add_(batch_dict['densityBC'])
         batch_dict['density'] = density.clone()
@@ -277,9 +279,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     elif stick:
         fluid.setWallBcsStick(U, flags, flags_stick)
 
-    if sim_method == 'convnet':
-        U = fluid.setWallBcs(U, flags)
-   
+    #if sim_method == 'convnet':
+    U = fluid.setWallBcs(U, flags)
+    #Special BC
+    U = fluid.setWallVKBcs(U, flags)
+
     # We add the BC i order to have Divergency in the border!
     setConstVals(batch_dict, p, U, flags, density)
     U = batch_dict['U']
@@ -341,6 +345,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         p, U, time = net(data, it)
        
         setConstVals(batch_dict, p, U, flags, density)
+        #Special VK
+        U = fluid.setWallVKBcs(U, flags)
         U = batch_dict['U']
 
         
@@ -437,12 +443,17 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             #fluid.velocityUpdate_Density(pressure=p, U=U, flags=flags, density=density)
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)
 
+        #Special VK
+        U = fluid.setWallVKBcs(U, flags)
+        U = batch_dict['U']
+
+
 
     elif (sim_method == 'PCG'):
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         maxIter = mconf['jacobiIter']
-        maxIter_PCG = 5 
+        maxIter_PCG = 1 
         pTol_PCG = 0.5e-6  
 
 
@@ -570,12 +581,12 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             #Jacobi_switch[it]=1
             Counter = 0
 
-            while abs(div_after).max() > Threshold and Counter< 5000:
+            while abs(div_after).max() > Threshold and Counter< 10000:
 
                 Jacobi_switch[it]+=1
 
                 div = fluid.velocityDivergence(U, flags)
-                print("Beginning ",(abs(div).max()).item())
+                #print("Beginning ",(abs(div).max()).item())
                 is3D = (U.size(2) > 1)
                 pTol = mconf['pTol']
                 maxIter = 1
@@ -608,13 +619,14 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
                 Counter +=1
                 div_after  = fluid.velocityDivergence(U, flags)
-                print("Ending ",(abs(div_after).max()).item())
+                #print("Ending ",(abs(div_after).max()).item())
 
-                print(" ----------------------------------------")
-                print("Counter :", Counter)
-                print("Div Max :", (abs(div_after).max()).item())
+                #print(" ----------------------------------------")
+                #print("Counter :", Counter)
+                #print("Div Max :", (abs(div_after).max()).item())
                  
-   
+    #print("Counter :", Counter)
+
     end_Pres = default_timer()
     time_Pressure=(end_Pres - start_Pres)
     print("time Pressure ", time_Pressure)

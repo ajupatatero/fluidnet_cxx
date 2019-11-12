@@ -7,8 +7,8 @@
 # is loaded when restarting a sim.
 # To restart precise <outputFolder> and set restartSim to true.
 # res : Resolution of domain
-resX: 128
-resY: 512
+resX: 4
+resY: 5
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
@@ -17,7 +17,7 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/DEBUG_PCG_TIMER"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/DEBUG_A"
 # simMethod: choose convnet or jacobi
 simMethod: "PCG"
 # modelDir : location of trained model

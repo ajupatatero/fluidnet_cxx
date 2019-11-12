@@ -65,6 +65,6 @@ def addViscosity(dt, U, flags, viscosity):
             U.narrow(4, 2, w-2).narrow(3, 1, h-2) + \
             U.narrow(4, 1, w-2).narrow(3, 2, h-2) + \
             U.narrow(4, 0, w-2).narrow(3, 1, h-2) + \
-            U.narrow(4, 0, w-2).narrow(3, 0, h-2) - \
+            U.narrow(4, 1, w-2).narrow(3, 0, h-2) - \
             (4*U.narrow(4, 1, w-2).narrow(3, 1, h-2) )\
             ) )

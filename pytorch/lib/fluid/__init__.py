@@ -1,6 +1,7 @@
 from .cell_type import CellType
 from .grid import getDx, getCentered
 from .set_wall_bcs import setWallBcs
+from .set_wall_bcs_VK import setWallVKBcs
 from .set_wall_bcs_stick import setWallBcsStick
 from .flags_to_occupancy import flagsToOccupancy
 from .velocity_divergence import velocityDivergence
@@ -15,3 +16,4 @@ from .cpp.advection import correctScalar, advectScalar, advectVelocity
 from .cpp.solve_linear_sys import solveLinearSystemJacobi
 from .cpp.solve_linear_sys import solveLinearSystemJacobi_Density
 from .cpp.solve_linear_sys import solveLinearSystemPCG
+from .MatrixA import createMatrixA
