@@ -28,7 +28,7 @@ def setWallVKBcs(U, flags):
     assert (U.is_contiguous() and flags.is_contiguous()), 'Input is not contiguous'
 
     #Hard Coded, new BC U_Scale = 0.05
-    u_scale = 0.133333
+    u_scale = 0.26666
 
     i = torch.arange(start=0, end=w, dtype=torch.long, device=cuda) \
             .view(1,w).expand(bsz, d, h, w)

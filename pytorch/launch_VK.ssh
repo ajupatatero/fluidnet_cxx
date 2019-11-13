@@ -12,5 +12,5 @@
 
 module load gcc/8.2.0
 source /scratch/daep/e.ajuria/actiAntonio/bin/activate
-CUDA_VISIBLE_DEVICES=1 python3 VK.py --simConf plumeConfig_VK.yaml
+CUDA_VISIBLE_DEVICES=1 python3 VK.py --simConf Config_VK.yaml
 

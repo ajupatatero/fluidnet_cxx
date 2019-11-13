@@ -162,9 +162,9 @@ try:
         #*********************** Simulation parameters **************************
         
         # We declare the center and radius of the cylinder
-        centerX = 600
-        centerY = 600
-        radCyl = 15
+        centerX = 300
+        centerY = 300
+        radCyl = 7.5
 
 
         resX = simConf['resX']
@@ -336,6 +336,7 @@ try:
             #lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres, Jacobi_switch, Max_Div, Max_Div_All, folder, it)
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
             end_big = default_timer()
+            print("BIG SIMULATE: ", (end_big - start_big))
             time_big[it] = (end_big - start_big)
             Probe_U_y[it]=batch_dict['U'][0,0,0,centerY+60,centerX].cpu().data.numpy()
 
@@ -447,8 +448,7 @@ try:
                     filename = folder + '/output_{0:05}.png'.format(it)
                     fig.savefig(filename)
                 
-                if it > 10000:
-                    save_vtk = True
+
                 if save_vtk:
                     px, py = 1580, 950
                     dpi = 100

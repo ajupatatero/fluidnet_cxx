@@ -340,14 +340,19 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         div_input= batch_dict['Div_in']
         div_input = div.clone()
 
+        #Big P NN
+        start_NN = default_timer()
+
         net.eval()
         data = torch.cat((p, U, flags, density), 1)
         p, U, time = net(data, it)
-       
         setConstVals(batch_dict, p, U, flags, density)
         #Special VK
         U = fluid.setWallVKBcs(U, flags)
         U = batch_dict['U']
+        
+        end_NN = default_timer()
+        print('NN inside: ', end_NN - start_NN)
 
         
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
@@ -540,6 +545,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 #density[:,:,:,:,2] = density_temp[:,:,:,:,-3]
 
 
+    end_Pres = default_timer()
+    time_Pressure=(end_Pres - start_Pres)
+    print("time Pressure ", time_Pressure)
+
 
     #elif stick:
     #    fluid.setWallBcsStick(U, flags, flags_stick)
@@ -627,9 +636,9 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                  
     #print("Counter :", Counter)
 
-    end_Pres = default_timer()
-    time_Pressure=(end_Pres - start_Pres)
-    print("time Pressure ", time_Pressure)
+    #end_Pres = default_timer()
+    #time_Pressure=(end_Pres - start_Pres)
+    #print("time Pressure ", time_Pressure)
 
     Time_Pres[it] = time_Pressure
 

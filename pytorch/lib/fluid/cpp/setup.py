@@ -1,5 +1,5 @@
 from setuptools import setup
-from torch.utils.cpp_extension import CppExtension, BuildExtension
+from torch.utils.cpp_extension import CppExtension, BuildExtension, CUDAExtension
 
 setup(
     name='fluidnet_cpp',
@@ -11,6 +11,7 @@ setup(
                 'advect_type.cpp',
                 'calc_line_trace.cpp',
                 'fluids_init.cpp'
+                ''
             ]),
     ],
     cmdclass={

@@ -11,5 +11,5 @@
 
 module load gcc/8.2.0
 source /scratch/daep/e.ajuria/actiAntonio/bin/activate
-CUDA_VISIBLE_DEVICES=0 python3 plume_Cylinder.py --simConf plumeConfig_Cyl_NN.yaml
+CUDA_VISIBLE_DEVICES=0 python3 plume_Cylinder.py --simConf Config_Plume_Cyl.yaml
 
