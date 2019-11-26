@@ -16,4 +16,5 @@ from .cpp.advection import correctScalar, advectScalar, advectVelocity
 from .cpp.solve_linear_sys import solveLinearSystemJacobi
 from .cpp.solve_linear_sys import solveLinearSystemJacobi_Density
 from .cpp.solve_linear_sys import solveLinearSystemPCG
-from .MatrixA import createMatrixA
+from .cpp.solve_linear_sys import solveLinearSystemCG
+from .MatrixA import createMatrixA,CreateCSR,CreateCSR_scipy,CreateCSR_Direct

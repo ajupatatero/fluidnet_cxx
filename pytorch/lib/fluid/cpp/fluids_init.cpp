@@ -1582,7 +1582,7 @@ std::vector<T> solveLinearSystemPCG
         //T p_delta = at::zeros({bsz, 1, d, h, w}, options).toType(p.scalar_type());
         //T p_delta_norm = at::zeros({bsz}, options).toType(p.scalar_type());
         
-        
+
         // Kernel: Jacobi Iteration
         T mCont = at::ones({bsz, 1, d, h, w}, options).toType(at::kByte); // Continue mask
         
@@ -2382,8 +2382,48 @@ std::vector<T> solveLinearSystemPCG
     } // end boucle batch
 
 }//end declaration PCG
-    
-    
+
+void solveLinearSystemCG
+(
+   T flags,
+   T div_vec,
+   T A_val,
+   T I_A,
+   T J_A,
+   T p,
+   float &residue,
+   const bool is3D,
+   const float p_tol = 1e-5,
+   const int max_iter = 1000,
+   const bool verbose = false
+) {
+
+  // Check arguments.
+  AT_ASSERTM(flags.size(1) == 1, "flags is not scalar");
+  int bsz = flags.size(0);
+  int d = flags.size(2);
+  int h = flags.size(3);
+  int w = flags.size(4);
+  int numel = d * h * w;
+
+  // CG TEST
+  std::cout << "BEGIN CG TEST  -------------------- "<< std::endl;
+
+
+  int nnz = A_val.size(0);
+  // x = (float *)malloc(sizeof(float)*N);
+  std::cout<<"p.data<float>() outside"<<p.data<float>()<<std::endl;
+  Conjugate_Gradient(flags,div_vec,A_val, I_A, J_A, p_tol, max_iter, h*w,h*w,nnz, p, residue);
+
+  // free(x);
+
+
+  std::cout << "END CG TEST  -------------------- "<< std::endl;
+
+  //return std::make_tuple(p,residual);
+
+} // End CG
+
 } // namespace fluid
     
     
@@ -2407,4 +2447,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("advect_vel", &(fluid::advectVel), "Advect Velocity");
     m.def("solve_linear_system_Jacobi", &(fluid::solveLinearSystemJacobi), "Solve Linear System using Jacobi's method");
     m.def("solve_linear_system_PCG", &(fluid::solveLinearSystemPCG), "Solve Linear System using PCG method");
+    m.def("solve_linear_system_CG", &(fluid::solveLinearSystemCG), "Solve Linear System using CG method");
 }

@@ -20,8 +20,8 @@ def createVKBCs(batch_dict, density_val, u_scale, rad):
     flags = batch_dict['flags']
 
     cuda = torch.device('cuda')
-    # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input}
-    assert len(batch_dict) == 6, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
+    # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input,VK}
+    assert len(batch_dict) == 7, "Batch must contain 7 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input, VK)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -267,9 +267,9 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     """
 
     #Jet length (jl -a) 
-    jl = 4
+    jl = 2
     #Jet first cell point
-    a=0
+    a=1
     
     flags = batch_dict['flags']
     

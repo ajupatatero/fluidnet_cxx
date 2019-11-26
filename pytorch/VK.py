@@ -160,15 +160,16 @@ try:
         net.load_state_dict(state['state_dict'])
 
         #*********************** Simulation parameters **************************
-        
-        # We declare the center and radius of the cylinder
-        centerX = 300
-        centerY = 300
-        radCyl = 7.5
-
-
+         
         resX = simConf['resX']
         resY = simConf['resY']
+
+        # We declare the center and radius of the cylinder
+        centerX = np.int(resX/2)
+        centerY = np.int(resX/2)
+        radCyl = np.int(resX/80)
+
+        print( "Center X ", centerX, " Y ", centerY, " and Center ", radCyl)
 
         p =       torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         U =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
@@ -185,6 +186,7 @@ try:
         batch_dict['flags'] = flags
         batch_dict['density'] = density
         batch_dict['Div_in']= div_input
+
         #We create a temporary flags for the inflow, in order to avoid affecting the advection
         #flags_i = flags.clone()
         #batch_dict['flags_inflow'] = flags_i
@@ -204,6 +206,10 @@ try:
         rho1 = simConf['injectionDensity']
         rad = simConf['sourceRadius']
         plume_scale = simConf['injectionVelocity']
+
+        #Only foer the VK
+
+        batch_dict['VK']= plume_scale
 
         #**************************** Initial conditions ***************************
 
@@ -232,9 +238,26 @@ try:
 
         U = batch_dict['U']
         U[:,1,:]+=plume_scale
-        U[:,0,:]+=plume_scale/10
+        U[:,0,:]+=plume_scale/5
         batch_dict['U'] = U
-                  
+        
+        # Creation of Matrix A
+        if mconf['simMethod']=='CG':
+
+            #A = fluid.createMatrixA(flags)
+            #A_val, I_A, J_A = fluid.CreateCSR(A)
+            #A_val, I_A, J_A = fluid.CreateCSR_scipy(A)
+
+            print("--------------------------------------------------------------")
+            print("------------------- A matrix creation ------------------------")
+            print("--------------------------------------------------------------")
+
+            A_val, I_A, J_A = fluid.CreateCSR_Direct(flags)
+
+            batch_dict['Val']= A_val
+            batch_dict['IA']= I_A
+            batch_dict['JA']= J_A
+
         #XXX: Create Box2D and Cylinders from YAML config file
         # Uncomment to create Cylinder or Box2D obstacles
         #fluid.createCylinder(batch_dict, centerX=0.5*resX,
@@ -338,7 +361,7 @@ try:
             end_big = default_timer()
             print("BIG SIMULATE: ", (end_big - start_big))
             time_big[it] = (end_big - start_big)
-            Probe_U_y[it]=batch_dict['U'][0,0,0,centerY+60,centerX].cpu().data.numpy()
+            Probe_U_y[it]=batch_dict['U'][0,0,0,centerY+3*radCyl,centerX].cpu().data.numpy()
 
             if (it% outIter == 0):
                 print("It = " + str(it))

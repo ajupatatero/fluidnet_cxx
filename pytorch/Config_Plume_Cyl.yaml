@@ -8,8 +8,8 @@
 # To restart precise <outputFolder> and set restartSim to true.
 
 # res : Resolution of domain
-resX: 128
-resY: 128
+resX: 200
+resY: 400
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
@@ -18,9 +18,9 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Result_plume_Corrected/Cylinder/Erase"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/Result_plume_Corrected/Cylinder/CG/Debug"
 # simMethod: choose convnet or jacobi
-simMethod: "convnet"
+simMethod: "CG"
 # modelDir : location of trained model
 modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 #modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/trained_models/ScaleNet_ShortTerm_LongTermLoss"
@@ -29,9 +29,9 @@ modelFilename: "convModel"
 # dt : simualation timestep
 dt: 5
 # statIter : iterations frequency for output
-statIter: 10
+statIter: 1
 # maxIter : maximum number of simulation iterations
-maxIter: 2000
+maxIter: 1
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.

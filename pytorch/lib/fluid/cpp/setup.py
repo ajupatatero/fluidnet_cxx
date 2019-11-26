@@ -10,6 +10,7 @@ setup(
                 'grid.cpp',
                 'advect_type.cpp',
                 'calc_line_trace.cpp',
+                'CG.cpp',
                 'fluids_init.cpp'
                 ''
             ]),

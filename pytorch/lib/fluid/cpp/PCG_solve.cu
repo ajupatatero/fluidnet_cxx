@@ -41,17 +41,20 @@
 #include <cublas_v2.h>
 
 // Utilities and system includes
-#include <helper_functions.h>  // helper for shared functions common to CUDA Samples
-#include <helper_cuda.h>       // helper for CUDA error checking
+//#include <helper_functions.h>  // helper for shared functions common to CUDA Samples
+//#include <helper_cuda.h>       // helper for CUDA error checking
+
+//#include </softs/src/cuda-10.0/samples/common/inc/helper_functions.h>  // helper for shared functions common to CUDA Samples
+//#include </softs/src/cuda-10.0/samples/common/inc/helper_cuda.h>       // helper for CUDA error checking
 
 const char *sSDKname     = "conjugateGradientPrecond";
 
 /* genLaplace: Generate a matrix representing a second order, regular, Laplacian operator on a 2d domain in Compressed Sparse Row format*/
 void genLaplace(int *row_ptr, int *col_ind, float *val, int M, int N, int nz, float *rhs)
 {
-    assert(M==N);
+    //assert(M==N);
     int n=(int)sqrt((double)N);
-    assert(n*n==N);
+    //assert(n*n==N);
     printf("laplace dimension = %d\n", n);
     int idx = 0;
 
@@ -149,27 +152,27 @@ int main(int argc, char **argv)
     printf("conjugateGradientPrecond starting...\n");
 
     /* QA testing mode */
-    if (checkCmdLineFlag(argc, (const char **)argv, "qatest"))
-    {
-        qatest = 1;
-    }
+    //if (checkCmdLineFlag(argc, (const char **)argv, "qatest"))
+    //{
+    //    qatest = 1;
+    //}
 
     /* This will pick the best possible CUDA capable device */
     cudaDeviceProp deviceProp;
-    int devID = findCudaDevice(argc, (const char **)argv);
-    printf("GPU selected Device ID = %d \n", devID);
+    //int devID = findCudaDevice(argc, (const char **)argv);
+    //printf("GPU selected Device ID = %d \n", devID);
 
-    if (devID < 0)
-    {
-        printf("Invalid GPU device %d selected,  exiting...\n", devID);
-        exit(EXIT_SUCCESS);
-    }
+    //if (devID < 0)
+    //{
+    //    printf("Invalid GPU device %d selected,  exiting...\n", devID);
+    //    exit(EXIT_SUCCESS);
+    //}
 
-    checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
+    //checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
 
     /* Statistics about the GPU device */
-    printf("> GPU device has %d Multi-Processors, SM %d.%d compute capabilities\n\n",
-           deviceProp.multiProcessorCount, deviceProp.major, deviceProp.minor);
+    //printf("> GPU device has %d Multi-Processors, SM %d.%d compute capabilities\n\n",
+    //       deviceProp.multiProcessorCount, deviceProp.major, deviceProp.minor);
 
     int version = (deviceProp.major * 0x10 + deviceProp.minor);
 
@@ -203,34 +206,34 @@ int main(int argc, char **argv)
     cublasStatus_t cublasStatus;
     cublasStatus = cublasCreate(&cublasHandle);
 
-    checkCudaErrors(cublasStatus);
+    //checkCudaErrors(cublasStatus);
 
     /* Create CUSPARSE context */
     cusparseHandle_t cusparseHandle = 0;
     cusparseStatus_t cusparseStatus;
     cusparseStatus = cusparseCreate(&cusparseHandle);
 
-    checkCudaErrors(cusparseStatus);
+    //checkCudaErrors(cusparseStatus);
 
     /* Description of the A matrix*/
     cusparseMatDescr_t descr = 0;
     cusparseStatus = cusparseCreateMatDescr(&descr);
 
-    checkCudaErrors(cusparseStatus);
+    //checkCudaErrors(cusparseStatus);
 
     /* Define the properties of the matrix */
     cusparseSetMatType(descr,CUSPARSE_MATRIX_TYPE_GENERAL);
     cusparseSetMatIndexBase(descr,CUSPARSE_INDEX_BASE_ZERO);
 
     /* Allocate required memory */
-    checkCudaErrors(cudaMalloc((void **)&d_col, nz*sizeof(int)));
-    checkCudaErrors(cudaMalloc((void **)&d_row, (N+1)*sizeof(int)));
-    checkCudaErrors(cudaMalloc((void **)&d_val, nz*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_x, N*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_y, N*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_r, N*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_p, N*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_omega, N*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_col, nz*sizeof(int)));
+    //checkCudaErrors(cudaMalloc((void **)&d_row, (N+1)*sizeof(int)));
+    //checkCudaErrors(cudaMalloc((void **)&d_val, nz*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_x, N*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_y, N*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_r, N*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_p, N*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_omega, N*sizeof(float)));
 
     cudaMemcpy(d_col, J, nz*sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_row, I, (N+1)*sizeof(int), cudaMemcpyHostToDevice);
@@ -332,22 +335,22 @@ int main(int argc, char **argv)
     int nzILU0 = 2*N-1;
     valsILU0 = (float *) malloc(nz*sizeof(float));
 
-    checkCudaErrors(cudaMalloc((void **)&d_valsILU0, nz*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_zm1, (N)*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_zm2, (N)*sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&d_rm2, (N)*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_valsILU0, nz*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_zm1, (N)*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_zm2, (N)*sizeof(float)));
+    //checkCudaErrors(cudaMalloc((void **)&d_rm2, (N)*sizeof(float)));
 
     /* create the analysis info object for the A matrix */
     cusparseSolveAnalysisInfo_t infoA = 0;
     cusparseStatus = cusparseCreateSolveAnalysisInfo(&infoA);
 
-    checkCudaErrors(cusparseStatus);
+    //checkCudaErrors(cusparseStatus);
 
     /* Perform the analysis for the Non-Transpose case */
     cusparseStatus = cusparseScsrsv_analysis(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                                              N, nz, descr, d_val, d_row, d_col, infoA);
 
-    checkCudaErrors(cusparseStatus);
+    //checkCudaErrors(cusparseStatus);
 
     /* Copy A data to ILU0 vals as input*/
     cudaMemcpy(d_valsILU0, d_val, nz*sizeof(float), cudaMemcpyDeviceToDevice);
@@ -355,7 +358,7 @@ int main(int argc, char **argv)
     /* generate the Incomplete LU factor H for the matrix A using cudsparseScsrilu0 */
     cusparseStatus = cusparseScsrilu0(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, N, descr, d_valsILU0, d_row, d_col, infoA);
 
-    checkCudaErrors(cusparseStatus);
+    //checkCudaErrors(cusparseStatus);
 
     /* Create info objects for the ILU0 preconditioner */
     cusparseSolveAnalysisInfo_t info_u;
@@ -382,8 +385,8 @@ int main(int argc, char **argv)
         x[i] = 0.0;
     }
 
-    checkCudaErrors(cudaMemcpy(d_r, rhs, N*sizeof(float), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(d_x, x, N*sizeof(float), cudaMemcpyHostToDevice));
+    //checkCudaErrors(cudaMemcpy(d_r, rhs, N*sizeof(float), cudaMemcpyHostToDevice));
+    //checkCudaErrors(cudaMemcpy(d_x, x, N*sizeof(float), cudaMemcpyHostToDevice));
 
     k = 0;
     cublasSdot(cublasHandle, N, d_r, 1, d_r, 1, &r1);
@@ -393,12 +396,12 @@ int main(int argc, char **argv)
         // Forward Solve, we can re-use infoA since the sparsity pattern of A matches that of L
         cusparseStatus = cusparseScsrsv_solve(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, N, &floatone, descrL,
                                               d_valsILU0, d_row, d_col, infoA, d_r, d_y);
-        checkCudaErrors(cusparseStatus);
+        //checkCudaErrors(cusparseStatus);
 
         // Back Substitution
         cusparseStatus = cusparseScsrsv_solve(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, N, &floatone, descrU,
                                               d_valsILU0, d_row, d_col, info_u, d_y, d_zm1);
-        checkCudaErrors(cusparseStatus);
+        //checkCudaErrors(cusparseStatus);
 
         k++;
 

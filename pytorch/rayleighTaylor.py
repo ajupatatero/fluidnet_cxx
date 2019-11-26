@@ -5,6 +5,7 @@ import yaml
 import torch
 import torch.autograd
 import time
+from timeit import default_timer
 
 import matplotlib
 if 'DISPLAY' not in glob.os.environ:
@@ -210,9 +211,13 @@ try:
 
 
         # Creation of Matrix A
-
-        A = fluid.createMatrixA(flags)
-
+        if mconf['simMethod']=='CG':
+            A = fluid.createMatrixA(flags)
+            A_val, I_A, J_A = fluid.CreateCSR(A)
+            batch_dict['Val']= A_val
+            batch_dict['IA']= I_A
+            batch_dict['JA']= J_A
+                
         if restart_sim:
             # Check if restart file exists in folder
             assert glob.os.path.isfile(restart_state_file), 'Restart file does not exists.'
@@ -303,8 +308,13 @@ try:
 
             method = mconf['simMethod']
 
+            start_big = default_timer()
+
             #lib.simulate(mconf, batch_dict, net, method, it)
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
+
+            end_big = default_timer()
+            print("BIG SIMULATE:------------>  ", (end_big - start_big))
 
             density_d =  batch_dict['density'].clone()
             rho_avgd = torch.mean(density_d).item()

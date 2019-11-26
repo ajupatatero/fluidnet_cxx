@@ -8,6 +8,7 @@
 #include "cell_type.h"
 #include "advect_type.h"
 #include "calc_line_trace.h"
+#include "CG.h"
 
 namespace fluid {
 
@@ -170,5 +171,20 @@ std::vector<T> solveLinearSystemPCG
    const int max_iter,
    const bool verbose
  );
+
+void solveLinearSystemCG
+(
+   T flags,
+   T div_vec,
+   T A_val,
+   T I_A,
+   T J_A,
+   T p,
+   float &residue,
+   const bool is3D,
+   const float p_tol,
+   const int max_iter,
+   const bool verbose
+);
 
 } // namespace fluid

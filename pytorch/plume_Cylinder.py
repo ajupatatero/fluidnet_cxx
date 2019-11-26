@@ -162,8 +162,8 @@ try:
         #*********************** Simulation parameters **************************
         
         # We declare the center and radius of the cylinder
-        centerX = 64
-        centerY = 80
+        centerX = 640
+        centerY = 800
         radCyl = 20
 
 
@@ -227,7 +227,15 @@ try:
 
            flags = flags.masked_fill_(mask_cylinder, 2)
 
-                  
+        # Creation of Matrix A
+        if mconf['simMethod']=='CG':
+            A = fluid.createMatrixA(flags)
+            #A_val, I_A, J_A = fluid.CreateCSR(A)
+            A_val, I_A, J_A = fluid.CreateCSR_scipy(A)
+            batch_dict['Val']= A_val
+            batch_dict['IA']= I_A
+            batch_dict['JA']= J_A
+
         #XXX: Create Box2D and Cylinders from YAML config file
         # Uncomment to create Cylinder or Box2D obstacles
         #fluid.createCylinder(batch_dict, centerX=0.5*resX,

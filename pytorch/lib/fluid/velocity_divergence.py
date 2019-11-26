@@ -65,6 +65,8 @@ def velocityDivergence(U, flags):
     div = Uijk.select(1,0) - Uijk_p.select(1,0) + \
                      Uijk.select(1,1) - Uijk_p.select(1,1)
 
+    div_debug = (Uijk[0,0,0] - Uijk_p[0,0,0]) + (Uijk[0,1,0] - Uijk_p[0,1,0])
+
     if (is_3d):
         div += Uijk.select(1,2) - Uijk_p.select(1,2)
     if (not is_3d):
@@ -84,6 +86,5 @@ def velocityDivergence(U, flags):
     #divergence[:,:,:,-2,:]=torch.zeros_like(divergence[:,:,:,-2,:])
     #divergence[:,:,:,1,:]=torch.zeros_like(divergence[:,:,:,1,:])
 
-    #print("Corrected Divergence: ", divergence)
     return divergence
 
