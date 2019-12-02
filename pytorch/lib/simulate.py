@@ -59,18 +59,31 @@ def setConstVals(batch_dict, p, U, flags, density):
 
 #def simulate(mconf, batch_dict, net, sim_method, output_div=False):
 def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_switch, Max_Div, Max_Div_All, folder, it, Threshold_Div, dt, Outside_Ja, output_div=False):
-    r"""Top level simulation loop.
+    """Top level simulation loop.
 
     Arguments:
         mconf (dict): Model configuration dictionnary.
         batch_dict (dict): Dictionnary of torch Tensors.
-            Keys must be 'U', 'flags', 'p', 'density'.
+            Keys must be 'U', 'flags', 'p', 'density', plus several other depending on the test case.
+            Usually, Max Div, VK as well as the parameters for the CG (IA, val, JA)
             Simulations are done INPLACE.
         net (nn.Module): convNet model.
-        sim_method (string): Options are 'convnet', 'PCG' and 'jacobi'
+        sim_method (string): Options are 'convnet', 'CG','PCG' and 'jacobi'
+        Time_vec (np.array(max_it)): Time taken for the Poisson equation resolution at each it.
+        Time_Pres (np.array(max_it)): Time taken for the Pressure correction step at each it.
+        Jacobi_switch (np.array(max_it)): In case of hybrid resolution, number of Jacobi it needed.
+        Max_Div (np.array(max_it)): Max divergence level after the first Poisson equation resolution.
+        Max_Div_All (np.array(max_it)): Max divergence level after the whole pressure resolution process,
+        specially useful for the hybrid case as shows the final divergence, whereas the Max div corresponds
+        to the divergence before the extra Jacobi its.
+        folder (string): Output folder, maybe not the most efficient way to add it, but useful for saving purposes.
+        it (int): actual iteration n.
+        Threshold_Div (float): In case of Hybrid method, stopping divergence level.
+        dt (float): Time dt (input value).
+        Outside_Ja (bool): If Hybrid method is activated or not.
         output_div (bool, optional): returns just before solving for pressure.
             i.e. leave the state as UDiv and pDiv (before substracting divergence)
-        it: only for dubugging, number of iteration
+
 
     """
 
@@ -180,16 +193,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     #Add Wall Bc
     #U = fluid.setWallBcs(U, flags)
     #setConstVals(batch_dict, p, U, flags, density)
-
     #pdb.set_trace() 
 
-    #HERE, no matter the method, we should get the same velocity field in the it 50
-    #Print After U
-    #folder = '/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_plume_Debug/Inflow_channel/BC/Debug'
-    
-    #Uadvec_cpu = U.cpu()
-    #filename_a = folder + '/U1_NN_After_Advection{0:05}'.format(it)
-    #np.save(filename_a,Uadvec_cpu)
 
     if 'density' in batch_dict:
         if buoyancyScale > 0:
@@ -202,9 +207,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             rho_star = mconf['operatingDensity']
 
             print("Applying buoyancy !")
-            #Chapuza n3
+
+            # Buoyancy adding ... Different functions were used (with not great success):
             U = fluid.addBuoyancy(U, flags, density, gravity, rho_star, dt)
             #U = fluid.addBuoyancy_NewSourceTerm(U, flags, density, gravity, rho_star, dt)
+
         if gravityScale > 0:
             gravity = torch.FloatTensor(3).fill_(0).cuda()
             gravity[0] = mconf['gravityVec']['x']
@@ -217,16 +224,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         print("Done Bouyancy + gravity")
 
 
-    #Print Before U
-    #Uinter_cpu = U.cpu()
-    #filename_inter = folder + '/U1_NN_Intermediate{0:05}'.format(it)
-    #np.save(filename_inter,Uinter_cpu)
-
-    # 19/09/19 Ekhi. We add the BC Ux = 0 on the right wall for the half domain!
-    #wall_zero = torch.zeros_like(U[:,0,:,:,-1])
-    #U[:,0,:,:,-1] = wall_zero
-    #U[:,0,:,:,-2] = wall_zero
-
     #U = fluid.setWallBcs(U, flags)
 
     if sim_method != 'convnet':
@@ -234,6 +231,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             U_temp = U.clone()
             # Density peridoicty
             density_temp = density.clone()
+
         #U = fluid.setWallBcs(U, flags)
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             if mconf['periodic-x']:
@@ -248,13 +246,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 #density[:,:,:,:,-2] = density_temp[:,:,:,:,1]
                 #density[:,:,:,:,-3] = density_temp[:,:,:,:,2]
 
-                #U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
-                #density[:,0,:,:,1] = density_temp[:,0,:,:,-2]
-                #U[:,1,:,:,1] = U_temp[:,1,:,:,-2]
-                #U[:,1,:,:,2] = U_temp[:,1,:,:,-3]
-                #U[:,0,:,:,2] = U_temp[:,0,:,:,-2]
-                #density[:,:,:,:,1] = density_temp[:,:,:,:,-2]
-                #density[:,:,:,:,2] = density_temp[:,:,:,:,-3]
 
     if sim_method == 'convnet':
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
@@ -270,8 +261,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             if mconf['periodic-y']:
  
                 print(" Periodic y 0 !")
-#                print("U copying ", U_temp[0,1,0,175:200,-2])
-#                print("U modifying before ", U[0,1,0,175:200,1])
  
                 U[:,1,:,:,-1] = U_temp[:,1,:,:,1]
                 U[:,0,:,:,-1] = -U_temp[:,0,:,:,1]
@@ -297,10 +286,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     div = fluid.velocityDivergence(U, flags)
     Advected_Div = (abs(div).max()).item()
 
-    #Print Before U
-    #Uinter_cpu = U.cpu()
-    #filename_inter = folder + '/U1_NN_Intermediate{0:05}'.format(it)
-    #np.save(filename_inter,Uinter_cpu)
 
     #Print Before U
     if (it% 1 == 0):    
@@ -319,52 +304,34 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         #np.save(filename_rhointer1,Rhointer_cpu)
 
 
-   # Save velocity field after the advection step!
-
+    # Save velocity field after the advection step!
     Ustar = U.clone()
    
-
-    #Print Before U
-    #Uinxb = U.clone()
-    #Ubef_cpu = Uinxb.cpu()
-    #filename_1 = folder + '/U_field/U1_Ja_Bef_update{0:05}'.format(it)
-    #np.save(filename_1,Ubef_cpu)
-
-
     #Timing for the whole P solving
     start_Pres = default_timer()
 
     if (sim_method == 'convnet'):
+
         # fprop the model to perform the pressure projection and velocity calculation.
         # Set wall BCs is performed inside the model, before and after the projection.
         # No need to call it again.
  
         #UDiv = fluid.setWallBcs(UDiv, flags)
         #U = fluid.setWallBcs(U, flags)       
-        #Input
-        div_input = div.clone()
 
+        # Save the divergence that is inputted to the Network
+        div_input = div.clone()
         batch_dict['Div_in'] = div_input
 
-        #Big P NN
-        start_NN = default_timer()
 
-        #start_event = torch.cuda.Event(enable_timing=True)
-        #end_event = torch.cuda.Event(enable_timing=True)
-        #start_event.record()
+        # It might be strait forward ... BUT remember that the model is saved in:
+        #../MODELFOLDER/MODELNAME_saved.py
+        # In our particular case:
+        # /scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA/ModelTest_EA_saved.py
 
         net.eval()
         data = torch.cat((p, U, flags, density), 1)
         p, U, time = net(data, it)
-
-        #end_event.record()
-        #torch.cuda.synchronize()  # Wait for the events to be recorded!
-        #elapsed_time_ms = start_event.elapsed_time(end_event)
-
-        #print("Elapsed Time ", elapsed_time_ms)
-
-        end_NN = default_timer()
-
        
         setConstVals(batch_dict, p, U, flags, density)
 
@@ -375,8 +342,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             U = fluid.setWallVKBcs(U, flags, BC_V)
 
         U = batch_dict['U']
-
-        print('NN inside end-start : ', end_NN - start_NN)
         
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             U_temp = U.clone()
@@ -391,8 +356,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             if mconf['periodic-y']:
  
                 print(" Periodic y 1 !")
-#                print("U copying ", U_temp[0,1,0,175:200,-2])
-#                print("U modifying before ", U[0,1,0,175:200,1])
  
                 U[:,1,:,:,-1] = U_temp[:,1,:,:,1]
                 U[:,0,:,:,-1] = -U_temp[:,0,:,:,1]
@@ -408,34 +371,14 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         h = div.size(3)
         w = div.size(4)
 
-        #Chapuza Scaling!
-        #div = div*20
-
-        div_input= batch_dict['Div_in']
-
-        #h_alt = torch.arange(0, h, dtype=torch.float, device=cuda).view(1,h,1).expand(bsz, ch,d, h, w)
-        #div[:,:,:,:256,:]+=(torch.ones_like(div[:,:,:,:256,:])*h_alt[:,:,:,:256,:]-130)/4000
-        #div[:,:,:,256:,:]+=(-1.0*torch.ones_like(div[:,:,:,256:,:])*(h_alt[:,:,:,256:,:]-256.0)+126)/4000
-
         div_input = div.clone()
+        batch_dict['Div_in'] = div_input
 
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
         load_file = folder + '/Jacobi_switch_loading.npy'
         #Maxi_Try = np.load(load_file)
         maxIter = mconf['jacobiIter']
-        #if it < 20:
-        #   maxIter = np.int(Maxi_Try[it]*10)
-        #else:
-        #   maxIter = np.int(Maxi_Try[it])
-
-        #Print Before U
-        #DUinxb = div.clone()
-        #DUbef_cpu = DUinxb.cpu()
-        #filename_3 = folder + '/U_field/Div_Ja_Bef_update{0:05}'.format(it)
-        #np.save(filename_3,DUbef_cpu)
-
-        start = default_timer()
 
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
@@ -452,41 +395,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
         print("elapsed Jacobi time: ", elapsed_time_ms)
 
-        end = default_timer()
-        time=(end - start)
-        print("time ", time, "it ", it )
-
-
-        #Print Pressures
-        #P_cpu = p.cpu()       
-        #filename = folder + '/P_NN_output_{0:05}'.format(it)
-        #np.save(filename,P_cpu)
-
-
-
-        # Chapuza n 1
-        # We add rho h to the pressure so that the velocity update includes the hydrostatic pressure
-
-        #p_tuned = p.clone()
-
-        #bsz = p.size(0)
-        #c = p.size(1)
-        #d = p.size(2)
-        #h = p.size(3)
-        #w =p.size(4)
-
-        #j = torch.arange(0, h, dtype=torch.float, device=cuda).view(1,h,1).expand(bsz,c,d, h, w)
-        #gravity_val = gravity[1].float()
-        
-        #p_tuned = p + density*gravity_val*j*dt
-
-        #p = p_tuned
+        time= elapsed_time_ms
 
             #fluid.velocityUpdate_Density(pressure=p, U=U, flags=flags, density=density)
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)
-
-        t_BC_i = default_timer()
-
         setConstVals(batch_dict, p, U, flags, density)
 
         #Special VK
@@ -494,12 +406,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             print("VK BC")
             BC_V = batch_dict['VK']
             U = fluid.setWallVKBcs(U, flags, BC_V)
+
         #U = fluid.setWallVKBcs(U, flags)
         U = batch_dict['U']
 
-        t_BC_e = default_timer()
-
-        print("BC time: ", t_BC_e - t_BC_i)
 
     elif (sim_method == 'CG'):
 
@@ -517,7 +427,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
         #Input
         div_input = div.clone()
-        
         batch_dict['Div_in'] = div_input
 
         #Timing Test
@@ -537,9 +446,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         
         print("elapsed CG time: ", elapsed_time_ms)
 
-        end = default_timer()
-        time=(end - start)
-        print("time", time)
+        time= elapsed_time_ms
+
 
         fluid.velocityUpdate(pressure=p, U=U, flags=flags)
         setConstVals(batch_dict, p, U, flags, density)
@@ -567,9 +475,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
         #Timing Test
         start = default_timer()
-        div_one = torch.zeros(5,5).float()
-        flags_one = torch.ones(5,5).float()
-        flags_one *= 2
 
         # Inflow 
         inflow = torch.zeros_like(flags)
@@ -587,25 +492,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         print( "IT  ", it)
         print(" ========================================================================")
 
-
-        """
-        div_one = (((div_one.unsqueeze(0)).unsqueeze(0)).unsqueeze(0))
-        flags_one = (((flags_one.unsqueeze(0)).unsqueeze(0)).unsqueeze(0))
-
-        zer = flags_one.unsqueeze(0)
-
-        for i in range(0,3):
-            
-            for j in range(0,3):
-                flags_one[0][0][0][i+1][j+1]=  flags_one[0][0][0][i+1][j+1] -1
-
-        U_only3 = torch.stack((U_only2,U_only), dim=1)
-
-        print("U only 3 shape ", U_only3.shape)
-
-        print("U only ", U_only)
-        div_new = fluid.velocityDivergence(U_only3, flags_one)
-        """
 
         p, residual = fluid.solveLinearSystemPCG( \
                 flags=flags, div=div, inflow = inflow_border, is_3d=is3D, p_tol=pTol_PCG, \
@@ -638,39 +524,19 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 U[:,0,:,:,-1] = -U_temp[:,0,:,:,1]
                 #U[:,1,:,:,-2] = U_temp[:,1,:,:,2]
                 #U[:,0,:,:,-2] = -U_temp[:,0,:,:,2]
-                #density[:,:,:,:,-2] = density_temp[:,:,:,:,1]
-                #density[:,:,:,:,-3] = density_temp[:,:,:,:,2]
-                #density[:,:,:,:,1] = density_temp[:,:,:,:,-2]
-                #density[:,:,:,:,2] = density_temp[:,:,:,:,-3]
-
-
-    end_Pres = default_timer()
-    time_Pressure=(end_Pres - start_Pres)
-    print("time Pressure ", time_Pressure)
-
-
     #elif stick:
     #    fluid.setWallBcsStick(U, flags, flags_stick)
-
-    # 19/09/19 Ekhi. We add the BC Ux = 0 on the right wall for the half domain!
-    #wall_zero = torch.zeros_like(U[:,0,:,:,-1])
-    #U[:,0,:,:,-1] = wall_zero
-    #U[:,0,:,:,-2] = wall_zero
 
     div_after  = fluid.velocityDivergence(U, flags)
 
     #Time Vec Saving
     Time_vec[it] = time
     filename = folder + '/Time'
-    #np.save(filename, Time_vec)
+    np.save(filename, Time_vec)
 
     #U = fluid.setWallBcs(U, flags)
     #setConstVals(batch_dict, p, U, flags, density)
 
-    #if it < 200:
-    #   Threshold = 3.e-4
-    #else:
-    #   Threshold = 8.e-4
     Threshold = Threshold_Div
 
     div_after  = fluid.velocityDivergence(U, flags)
@@ -729,28 +595,21 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 div_after  = fluid.velocityDivergence(U, flags)
                 #print("Ending ",(abs(div_after).max()).item())
 
-                #print(" ----------------------------------------")
-                #print("Counter :", Counter)
-                #print("Div Max :", (abs(div_after).max()).item())
                  
-    #print("Counter :", Counter)
 
-    #end_Pres = default_timer()
-    #time_Pressure=(end_Pres - start_Pres)
-    #print("time Pressure ", time_Pressure)
+    end_Pres = default_timer()
+    time_Pressure=(end_Pres - start_Pres)
 
     Time_Pres[it] = time_Pressure
+    filename_pres = folder + '/Time_Pres'
+    np.save(filename_pres, Time_Pres)
+
 
     div_final  = fluid.velocityDivergence(U, flags)
     Max_Div_All[it] = (abs(div_final).max()).item()
 
     print(" ----------------------------------------")
     print("Div FINAL OF ITERATIVE PROCES :", (abs(div_final).max()).item())
-
-    # 19/09/19 Ekhi. We add the BC Ux = 0 on the right wall for the half domain!
-    #wall_zero = torch.zeros_like(U[:,0,:,:,-1])
-    #U[:,0,:,:,-1] = wall_zero
-    #U[:,0,:,:,-2] = wall_zero
 
     #U = fluid.setWallBcs(U, flags)
 
@@ -768,8 +627,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             if mconf['periodic-y']:
 
                 print(" Periodic y !")
-#                print("U copying ", U_temp[0,1,0,175:200,-2])
-#                print("U modifying before ", U[0,1,0,175:200,1])
 
                 U[:,1,:,:,-1] = U_temp[:,1,:,:,1]
                 U[:,0,:,:,-1] = -U_temp[:,0,:,:,1]
@@ -796,22 +653,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 U[:,1,:,:,-1] = U_temp[:,1,:,:,1]
                 U[:,0,:,:,-1] = -U_temp[:,0,:,:,1]
 
-
-#    # Final Check U 
-#
-#    print("U x 0 ", U[0,0,0,175:200,0])
-#    print("U x 1 ", U[0,0,0,175:200,1])
-#    print("U x 2 ", U[0,0,0,175:200,2])
-#    print("U x -3 ", U[0,0,0,175:200,-3])
-#    print("U x -2 ", U[0,0,0,175:200,-2])
-#    print("U x -1 ", U[0,0,0,175:200,-1])
-#
-#    print("U y 0 ", U[0,1,0,175:200,0])
-#    print("U y 1 ", U[0,1,0,175:200,1])
-#    print("U y 2 ", U[0,1,0,175:200,2])
-#    print("U y -3 ", U[0,1,0,175:200,-3])
-#    print("U y -2 ", U[0,1,0,175:200,-2])
-#    print("U y -1 ", U[0,1,0,175:200,-1])
 
     batch_dict['Ustar'] = Ustar
     batch_dict['U'] = U

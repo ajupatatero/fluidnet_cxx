@@ -81,6 +81,8 @@ folder = arguments.outputFolder or simConf['outputFolder']
 if (not glob.os.path.exists(folder)):
     glob.os.makedirs(folder)
 
+# Create the configuratio, re starting and the average density tensors
+
 restart_config_file = glob.os.path.join('/', folder, 'rayleighTaylorConfig.yaml')
 restart_state_file = glob.os.path.join('/', folder, 'restart.pth')
 save_dist_file = glob.os.path.join('/', folder, 'growth.npy')
@@ -92,6 +94,7 @@ if restart_sim:
     with open(restart_config_file) as f:
         simConfig = yaml.load(f)
 
+# Read from either Config file or from argument parser
 simConf['modelDir'] = arguments.modelDir or simConf['modelDir']
 assert (glob.os.path.exists(simConf['modelDir'])), 'Directory ' + str(SimConf['modelDir']) + ' does not exists'
 simConf['modelFilename'] = arguments.modelFilename or simConf['modelFilename']
@@ -99,6 +102,7 @@ simConf['modelDirname'] = simConf['modelDir'] + '/' + simConf['modelFilename']
 resume = False # For training, at inference set always to false
 
 
+# Check cuda device and create a temporal model
 print('Active CUDA Device: GPU', torch.cuda.current_device())
 print()
 path = simConf['modelDir']
@@ -115,6 +119,7 @@ spec.loader.exec_module(model_saved)
 
 try:
     #te = lib.FluidNetDataset(conf, 'te', save_dt=4, resume=resume) # Test instance of custom Dataset
+    # Create the mconf dictionary
     mconf = {}
     #conf, mconf = te.createConfDict()
 
@@ -126,6 +131,7 @@ try:
     mconf.update(torch.load(mcpath))
 
     print('==> overwriting mconf with user-defined simulation parameters')
+
     # Overwrite mconf values with user-defined simulation values.
     mconf.update(simConf)
 
@@ -141,8 +147,13 @@ try:
 
         cuda = torch.device('cuda')
 
+        # Domain Resolution
+
         resX = simConf['resX']
         resY = simConf['resY']
+
+        #Declare the model variables: p, U, flags density and U star, div_input (which
+        # correspond to the injected divergence and non corrected velocity field)
 
         p =       torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         U =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
@@ -151,10 +162,14 @@ try:
         density = torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
 
+        # Domain initialization
         fluid.emptyDomain(flags)
 
         #flags[0,0,0,1:-1,0]= torch.ones((resY-2), dtype=torch.float).cuda()
         #flags[0,0,0,1:-1,-1]=torch.ones((resY-2), dtype=torch.float).cuda()
+
+        # Start dictionary variables and load if results will be plotted, saved and which 
+        # solver system will be used. Iter Max and both densities are loaded as well
 
         batch_dict = {}
         batch_dict['p'] = p
@@ -167,48 +182,35 @@ try:
         real_time = simConf['realTimePlot']
         save_vtk = simConf['saveVTK']
         method = simConf['simMethod']
-        it = 0
-
         max_iter = simConf['maxIter']
         outIter = simConf['statIter']
 
         rho1 = mconf['rho1']
         rho2 = mconf['rho2']
 
-        mconf['periodic-y'] = False 
+        # Periodicity is hard coded! This could be later on changed
+
+        mconf['periodic-y'] = False
         mconf['periodic-x'] = False
 
+        # Initialize it
+        it = 0
+
+        # Initialize and save the model
         net = model_saved.FluidNet(mconf, it, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
         net.load_state_dict(state['state_dict'])
 
+        # Initial mean density
+
         density_a =  batch_dict['density'].clone()
         rho_avg = torch.mean(density_a).item()
         print("Avg rho 0 = " + str(rho_avg))
 
+        # Create Initial Rayleigh Taylor BCs
         print('Creating initial conditions')
         fluid.createRayleighTaylorBCs(batch_dict, mconf, rho1=rho1, rho2=rho2)
-        # If restarting, overwrite all fields with checkpoint.
-        # Periodic Density
-
-        #density_p = batch_dict['density'].clone()
-
-        #density_p[0,0,0,1:200,0]= (rho1*torch.ones((199), dtype=torch.float)).cuda()
-        #density_p[0,0,0,200:399,0]=(rho2*torch.ones((199), dtype=torch.float)).cuda()
-
-        #density_p[0,0,0,1:200,-1]= (rho1*torch.ones((199), dtype=torch.float)).cuda()
-        #density_p[0,0,0,200:399,-1]=(rho2*torch.ones((199), dtype=torch.float)).cuda()
-
-        #batch_dict['density'] = density_p
-
-        #####
-
-        density_b =  batch_dict['density'].clone()
-
-        rho_avga = torch.mean(density_b).item()
-        print("Avg rho 1 = " + str(rho_avga))
-
 
         # Creation of Matrix A
         if mconf['simMethod']=='CG':
@@ -217,7 +219,9 @@ try:
             batch_dict['Val']= A_val
             batch_dict['IA']= I_A
             batch_dict['JA']= J_A
-                
+
+
+        # If restarting, overwrite all fields with checkpoint.                
         if restart_sim:
             # Check if restart file exists in folder
             assert glob.os.path.isfile(restart_state_file), 'Restart file does not exists.'
@@ -287,38 +291,41 @@ try:
                 #headwidth=headwidth, headlength=headlength,
                 color='black')
 
+        # Vector initialization. These include: 
+        # -- Time Vec: Time taken for the Poisson equation,
+        # -- Time_Pres: Time taken for the Pressure correction, 
+        # -- Time_big: Time taken for the entire simulate iteration (advection + pressure)
+        # -- Jacobi_switch (how many Jacobi iterations are made in the Hybrid strategy
+        # and Max_Div + Max_Div_All (max divergence for all)
+
+        Time_vec = np.zeros(max_iter)
+        Time_Pres = np.zeros(max_iter)
+        time_big = np.zeros(max_iter)
+        Jacobi_switch = np.zeros(max_iter)
+        Max_Div = np.zeros(max_iter)
+        Max_Div_All = np.zeros(max_iter)
+
         while (it < max_iter):
-
-            density_c =  batch_dict['density'].clone()
-            rho_avgc = torch.mean(density_c).item()
-            print("Avg rho 2 = " + str(rho_avgc))
-        
-            #Time Vec Declaration
-            Time_vec = np.zeros(max_iter)
-            Time_Pres = np.zeros(max_iter)
-            time_big = np.zeros(max_iter)
-            Jacobi_switch = np.zeros(max_iter)
-            Max_Div = np.zeros(max_iter)
-            Max_Div_All = np.zeros(max_iter)
-
+            
+            # Load simulation dt, if the hybrid method will be executed and  which will be the threshold
             dt = arguments.setdt or simConf['dt']
             Outside_Ja = simConf['outside_Ja']
             Threshold_Div = arguments.setThreshold or simConf['threshold_Div']
 
-
-            method = mconf['simMethod']
-
+            #Begin big Time timer!
             start_big = default_timer()
 
             #lib.simulate(mconf, batch_dict, net, method, it)
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
 
+            # End lib simulate ... Save this into Time_big
             end_big = default_timer()
-            print("BIG SIMULATE:------------>  ", (end_big - start_big))
 
-            density_d =  batch_dict['density'].clone()
-            rho_avgd = torch.mean(density_d).item()
-            print("Avg rho 3 = " + str(rho_avgd))
+            print("BIG SIMULATE:------------>  ", (end_big - start_big))
+            time big[it] = end_big - start_big
+
+            filename_bigtime = folder + '/Time_big'
+            np.save(filename_bigtime,time_big)
 
             density = batch_dict['density'].clone()
             center_X = resX // 2
@@ -361,7 +368,7 @@ try:
 
                 # As there is no source of fluid, the average density should be conserved
                 rho_avg = torch.mean(density).item()
-                print("Avg rho = " + str(rho_avg))
+                #print("Avg rho = " + str(rho_avg))
                 avg_density = np.append(avg_density, [[it, rho_avg]],
                         axis=0)
                 np.save(save_rho_file, avg_density)
