@@ -20,8 +20,8 @@ def createVKBCs(batch_dict, density_val, u_scale, rad):
     flags = batch_dict['flags']
 
     cuda = torch.device('cuda')
-    # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input,VK}
-    assert len(batch_dict) == 7, "Batch must contain 7 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input, VK)"
+    # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input,VK, simutype}
+    assert len(batch_dict) == 8, "Batch must contain 8 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input, VK, simutype)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -141,7 +141,7 @@ def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
 
     cuda = torch.device('cuda')
     # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input}
-    assert len(batch_dict) == 6, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
+    assert len(batch_dict) == 8, "Batch must contain 8 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -275,7 +275,7 @@ def createPlumeBCs(batch_dict, density_val, u_scale, rad):
     
     cuda = torch.device('cuda')
     # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input}
-    assert len(batch_dict) == 6, "Batch must contain 4 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
+    assert len(batch_dict) == 8, "Batch must contain 8 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -408,8 +408,10 @@ def createRayleighTaylorBCs(batch_dict, mconf, rho1, rho2):
     """
 
     cuda = torch.device('cuda')
+
+    print("len batch ", len(batch_dict))
     # batch_dict at input: {p, UDiv, flags, density, UStar, divergency input}
-    assert len(batch_dict) == 6, "Batch must contain 5 tensors (p, UDiv, flags, density,Ustar, divergency input)"
+    assert len(batch_dict) == 7, "Batch must contain 7 tensors (p, UDiv, flags, density,Ustar, divergency input)"
     UDiv = batch_dict['U']
     flags = batch_dict['flags']
 

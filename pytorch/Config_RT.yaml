@@ -7,8 +7,8 @@
 # is loaded when restarting a sim.
 # To restart precise <outputFolder> and set restartSim to true.
 # res : Resolution of domain
-resX: 50
-resY: 100
+resX: 200
+resY: 400
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
@@ -17,9 +17,9 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: true
 # outputFolder : folder for storing results, checkpoints and config files
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/50x100/Ja400"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_Rayleigh/200x400/CG_baseline_test"
 # simMethod: choose convnet or jacobi
-simMethod: "jacobi"
+simMethod: "CG"
 # modelDir : location of trained model
 modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
@@ -29,7 +29,7 @@ dt: 0.05
 # statIter : iterations frequency for output
 statIter: 10
 # maxIter : maximum number of simulation iterations
-maxIter: 500
+maxIter: 600
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -58,9 +58,9 @@ viscosity: 0
 # by (density(i,j) - operatingDensity)
 operatingDensity: 0.0
 # pTol : convergence criterion for Jacobi method
-pTol: 0.0
+pTol: 1.e-5
 # jacobiIter : maximum number of iterations for Jacobi method
-jacobiIter: 400
+jacobiIter: 10000
 # gravityVec : orientation of the gravity vector when buoyancy/gravity 
 # are present.
 gravityVec:
@@ -75,7 +75,7 @@ perturbAmplitude: 0.01
 height: 0.5
 # Extra parameters for lib.simulate
 #If True we will update the divergency outside the Box!
-outside_Ja: False
+outside_Ja: True
 #Threshold for the Jacobi its
-threshold_Div: 1.e-4
+threshold_Div: 5.e-4
 

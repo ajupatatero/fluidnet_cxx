@@ -8,8 +8,8 @@
 # To restart precise <outputFolder> and set restartSim to true.
 
 # res : Resolution of domain
-resX: 200
-resY: 400
+resX: 500
+resY: 1000
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
@@ -27,11 +27,11 @@ modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
-dt: 5
+dt: 15
 # statIter : iterations frequency for output
 statIter: 1
 # maxIter : maximum number of simulation iterations
-maxIter: 1
+maxIter: 100
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -70,11 +70,11 @@ gravityVec:
     y: -1.0
     z:  0.0
 # injectionDensity : density at buoyant plume inlet
-injectionDensity: 0.01
+injectionDensity: 0.001
 # sourceRadius : radius of inlet zone w.r.t the center of x-axis
 sourceRadius: 0.145
 # injectionVelocity : inlet velocity
-injectionVelocity: 0.05
+injectionVelocity: 0.005
 # Extra parameters for lib.simulate
 #If True we will update the divergency outside the Box!
 outside_Ja: False

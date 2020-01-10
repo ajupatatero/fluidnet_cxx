@@ -185,6 +185,8 @@ try:
         batch_dict['flags'] = flags
         batch_dict['density'] = density
         batch_dict['Div_in']= div_input
+
+        batch_dict['Test_case']= 'Plume'
         #We create a temporary flags for the inflow, in order to avoid affecting the advection
         #flags_i = flags.clone()
         #batch_dict['flags_inflow'] = flags_i
@@ -227,14 +229,24 @@ try:
 
            flags = flags.masked_fill_(mask_cylinder, 2)
 
+
         # Creation of Matrix A
         if mconf['simMethod']=='CG':
-            A = fluid.createMatrixA(flags)
+
+            #A = fluid.createMatrixA(flags)
             #A_val, I_A, J_A = fluid.CreateCSR(A)
-            A_val, I_A, J_A = fluid.CreateCSR_scipy(A)
+            #A_val, I_A, J_A = fluid.CreateCSR_scipy(A)
+
+            print("--------------------------------------------------------------")
+            print("------------------- A matrix creation ------------------------")
+            print("--------------------------------------------------------------")
+
+            A_val, I_A, J_A = fluid.CreateCSR_Direct(flags)
+
             batch_dict['Val']= A_val
             batch_dict['IA']= I_A
             batch_dict['JA']= J_A
+
 
         #XXX: Create Box2D and Cylinders from YAML config file
         # Uncomment to create Cylinder or Box2D obstacles

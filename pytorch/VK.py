@@ -187,6 +187,8 @@ try:
         batch_dict['density'] = density
         batch_dict['Div_in']= div_input
 
+        batch_dict['Test_case']= 'VK'
+
         #We create a temporary flags for the inflow, in order to avoid affecting the advection
         #flags_i = flags.clone()
         #batch_dict['flags_inflow'] = flags_i
@@ -252,7 +254,25 @@ try:
             print("------------------- A matrix creation ------------------------")
             print("--------------------------------------------------------------")
 
+            #if glob.os.path.isfile(folder+"/A_val.npy"):
+
+            #    print("A val already exists! ")
+            #    print("Loaded!")
+            #    A_val = np.load(folder + '/A_val.npy')
+            #    I_A = np.load(folder+'/I_A.npy')
+            #    J_A = np.load(folder+'/J_A.npy')
+
+            #else:
+
             A_val, I_A, J_A = fluid.CreateCSR_Direct(flags)
+
+            filenameA = folder + '/A_val'
+            np.save(filenameA,A_val)
+            filenameI = folder + '/I_A'
+            np.save(filenameI,I_A)
+            filenameJ = folder + '/J_A'
+            np.save(filenameJ,J_A)
+
 
             batch_dict['Val']= A_val
             batch_dict['IA']= I_A
@@ -346,10 +366,19 @@ try:
 
         # Probe and Plotting
         Probe_U_y = np.zeros(max_iter)
+        Probe_U_x = np.zeros(max_iter)
         range_plt = np.arange(max_iter)
 
         # Main loop
         while (it < max_iter):
+
+            #Save Previous U
+            if it > 0:
+                tensor_vel_prev = fluid.getCentered(batch_dict['U'].clone())
+                img_norm_vel_prev = torch.squeeze(torch.norm(tensor_vel_prev,
+                    dim=1, keepdim=True)).cpu().data.numpy()
+                img_velx_prev = torch.squeeze(tensor_vel_prev[:,0]).cpu().data.numpy()
+                img_vely_prev = torch.squeeze(tensor_vel_prev[:,1]).cpu().data.numpy()
 
             start_big = default_timer()
             #lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres, Jacobi_switch, Max_Div, Max_Div_All, folder, it)
@@ -364,6 +393,7 @@ try:
 
             # Hard coded, Probe value for the Strouhal number, always situated at 1.5 diameters from the cylinder
             Probe_U_y[it]=batch_dict['U'][0,0,0,centerY+3*radCyl,centerX].cpu().data.numpy()
+            Probe_U_x[it]=batch_dict['U'][0,1,0,centerY+3*radCyl,centerX].cpu().data.numpy()
 
             if (it% outIter == 0):
                 print("It = " + str(it))
@@ -393,12 +423,34 @@ try:
                 img_vely_masked = img_vely_masked.filled()
                 img_vel_norm_masked = img_vel_norm_masked.filled()
 
+                fla = batch_dict['flags'].clone()
+                f = torch.squeeze(fla).cpu().data.numpy()
+
                 filename12 = folder + '/Probe_U_y'
                 np.save(filename12,Probe_U_y)
+                filename14 = folder + '/Probe_U_x'
+                np.save(filename14,Probe_U_x)
                 filename_big = folder + '/Time_big'
                 np.save(filename_big,time_big)
 
-            
+                if it > 35000:
+
+                    filename3 = folder + '/P_output_{0:05}'.format(it)
+                    np.save(filename3,p[minY:maxY,minX:maxX])
+                    filename4 = folder + '/sh_output_{0:05}'.format(it)
+                    np.save(filename4,f[minY:maxY,minX:maxX])
+
+                    filename5 = folder + '/Ux_NN_output_{0:05}'.format(it)
+                    np.save(filename5,img_velx[minY:maxY,minX:maxX])
+                    filename6 = folder + '/Uy_NN_output_{0:05}'.format(it)
+                    np.save(filename6,img_vely[minY:maxY,minX:maxX])
+
+                    filename7 = folder + '/Ux_NN_output_{0:05}'.format(it-1)
+                    np.save(filename7,img_velx_prev[minY:maxY,minX:maxX])
+                    filename8 = folder + '/Uy_NN_output_{0:05}'.format(it-1)
+                    np.save(filename8,img_vely_prev[minY:maxY,minX:maxX])            
+
+
                 if real_time:
                     cax_rho.clear()
                     cax_velx.clear()

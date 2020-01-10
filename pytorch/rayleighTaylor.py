@@ -179,6 +179,8 @@ try:
         batch_dict['Ustar'] = Ustar
         batch_dict['Div_in']= div_input
 
+        batch_dict['Test_case']= 'RT'
+
         real_time = simConf['realTimePlot']
         save_vtk = simConf['saveVTK']
         method = simConf['simMethod']
@@ -212,13 +214,27 @@ try:
         print('Creating initial conditions')
         fluid.createRayleighTaylorBCs(batch_dict, mconf, rho1=rho1, rho2=rho2)
 
+
         # Creation of Matrix A
-        if mconf['simMethod']=='CG':
-            A = fluid.createMatrixA(flags)
-            A_val, I_A, J_A = fluid.CreateCSR(A)
-            batch_dict['Val']= A_val
-            batch_dict['IA']= I_A
-            batch_dict['JA']= J_A
+        #if mconf['simMethod']=='CG':
+        #    A = fluid.createMatrixA(flags)
+        #    A_val, I_A, J_A = fluid.CreateCSR(A)
+        #    batch_dict['Val']= A_val
+        #    batch_dict['IA']= I_A
+        #    batch_dict['JA']= J_A
+
+        # Create the A matrix in the beggining!, this will give us the basic pressure field, 
+        # which will be substracted at each step
+
+        print("--------------------------------------------------------------")
+        print("------------------- A matrix creation ------------------------")
+        print("--------------------------------------------------------------")
+
+        A_val, I_A, J_A = fluid.CreateCSR_Direct(flags)
+
+        batch_dict['Val']= A_val
+        batch_dict['IA']= I_A
+        batch_dict['JA']= J_A
 
 
         # If restarting, overwrite all fields with checkpoint.                
@@ -312,6 +328,12 @@ try:
             Outside_Ja = simConf['outside_Ja']
             Threshold_Div = arguments.setThreshold or simConf['threshold_Div']
 
+
+            if it<1:
+                method='CG'
+            else:
+                method=simConf['simMethod']
+
             #Begin big Time timer!
             start_big = default_timer()
 
@@ -321,8 +343,17 @@ try:
             # End lib simulate ... Save this into Time_big
             end_big = default_timer()
 
-            print("BIG SIMULATE:------------>  ", (end_big - start_big))
-            time big[it] = end_big - start_big
+            tensor_div = fluid.velocityDivergence(batch_dict['U'].clone(),batch_dict['flags'].clone())
+
+            print("=========================================================================")
+            print("")
+            print("BIG SIMULATE:--------------------------------->  ", (end_big - start_big))
+            print("")
+            print("FINAL Div:------------------------------------>  ", abs(tensor_div).max().item())
+            print("")
+            print("=========================================================================")
+
+            time_big[it] = end_big - start_big
 
             filename_bigtime = folder + '/Time_big'
             np.save(filename_bigtime,time_big)

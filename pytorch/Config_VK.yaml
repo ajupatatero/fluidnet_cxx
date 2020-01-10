@@ -16,22 +16,22 @@ restartSim: false
 realTimePlot: false
 # saveVTK : set to true to save results as structured VTK files
 # use Paraview to load those files.
-saveVTK: true
+saveVTK: false
 # outputFolder : folder for storing results, checkpoints and config filesoutputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_plume_Debug/VK_BC_NN_Re_500"
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_VK/VK_CG_Re_100_IK_2400v48000_Long"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_VK/VK_Hybrid_Re_100_IK_2400v4800_Cp"
 # simMethod: choose convnet or jacobi or PCG
-simMethod: "CG"
+simMethod: "convnet"
 # modelDir : location of trained model
 modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 #modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/trained_models/ScaleNet_ShortTerm_LongTermLoss"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
-dt: 3
+dt: 3.0
 # statIter : iterations frequency for output
-statIter: 600
+statIter: 25
 # maxIter : maximum number of simulation iterations
-maxIter: 25000
+maxIter: 40000
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -74,9 +74,9 @@ injectionDensity: 0.0
 # sourceRadius : radius of inlet zone w.r.t the center of x-axis
 sourceRadius: 0.145
 # injectionVelocity : inlet velocity
-injectionVelocity: 0.0666666
+injectionVelocity: 0.0666666666666666
 # Extra parameters for lib.simulate
 #If True we will update the divergency outside the Box!
 outside_Ja: False
 #Threshold for the Jacobi its
-threshold_Div: 8.e-4
+threshold_Div: 1.e-4
