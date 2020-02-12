@@ -153,7 +153,7 @@ try:
         it = 0
         cuda = torch.device('cuda')
 
-        net = model_saved.FluidNet(mconf, it, dropout=False)
+        net = model_saved.FluidNet(mconf, it, folder, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
 

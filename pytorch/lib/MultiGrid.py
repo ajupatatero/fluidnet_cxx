@@ -135,6 +135,6 @@ class MultiScaleNet(nn.Module):
         convN_1out = self.convN_1( torch.cat((F.upsample(x,(x.size()[2:]),mode = 'bilinear'),
                                          F.upsample(convN_2out,(x.size()[2:]),mode = 'bilinear')),dim = 1) )
         final_out = torch.cat((self.final(convN_1out),F.upsample(convN_2out,(x.size()[2:]),mode = 'bilinear'),
-                                        F.upsample(convN_4out,(half_size),mode = 'bilinear')),dim=0)
+                                        F.upsample(convN_4out,(half_size),mode = 'bilinear')),dim=1)
         print("Final shape ", final_out.shape)
         return final_out

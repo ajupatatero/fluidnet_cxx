@@ -50,9 +50,10 @@ def setConstVals(batch_dict, p, U, flags, density):
         batch_dict['U'] = U.clone()
 
     if ('densityBCInvMask' in batch_dict) and ('densityBC' in batch_dict):
+
         Mask = batch_dict['densityBCInvMask']
         #print(" densityBCInvMask ", Mask[0,0,0,0:2,:])
-        density[:,:,:,1:4,:]=0
+        #density[:,:,:,1:4,:]=0
         density.mul_(batch_dict['densityBCInvMask'])
         density.add_(batch_dict['densityBC'])
         batch_dict['density'] = density.clone()
@@ -143,6 +144,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     if 'density' in batch_dict:
         density = batch_dict['density']
 
+        print("Advecting Density")
+
         # First advect all scalar fields.
         density = fluid.advectScalar(dt, density, U, flags, \
                 method="eulerFluidNet", \
@@ -173,6 +176,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         #np.save(filename_rhointer1,Rhointer_cpu)
 
     flags_only= flags.clone()
+
 
     if viscosity == 0:
         # Self-advect velocity if inviscid
@@ -270,6 +274,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
     #if sim_method == 'convnet':
     U = fluid.setWallBcs(U, flags)
+ 
 
     #Special VK
     if 'VK' in batch_dict.keys():
@@ -319,6 +324,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         #UDiv = fluid.setWallBcs(UDiv, flags)
         #U = fluid.setWallBcs(U, flags)       
 
+
         if (batch_dict['Test_case']== 'RT' and it >0):
 
             # Save the divergence that is inputted to the Network
@@ -348,8 +354,9 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
         net.eval()
         data = torch.cat((p, U, flags, density), 1)
-        p, U, time = net(data, it)
+        p, U, time = net(data, it,folder)
        
+
         setConstVals(batch_dict, p, U, flags, density)
 
         #Special VK

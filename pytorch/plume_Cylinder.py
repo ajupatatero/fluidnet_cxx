@@ -374,11 +374,11 @@ try:
                 img_vely_masked = img_vely_masked.filled()
                 img_vel_norm_masked = img_vel_norm_masked.filled()
 
-                filename3 = folder + '/Rho_NN_output_{0:05}'.format(it)
-                np.save(filename3,rho[minY:maxY,minX:maxX])
+                #filename3 = folder + '/Rho_NN_output_{0:05}'.format(it)
+                #np.save(filename3,rho[minY:maxY,minX:maxX])
 
-                filename5 = folder + '/Div_NN_output_{0:05}'.format(it)
-                np.save(filename5,div[minY:maxY,minX:maxX])
+                #filename5 = folder + '/Div_NN_output_{0:05}'.format(it)
+                #np.save(filename5,div[minY:maxY,minX:maxX])
 
                 if real_time:
                     cax_rho.clear()

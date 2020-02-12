@@ -8,8 +8,8 @@
 # To restart precise <outputFolder> and set restartSim to true.
 
 # res : Resolution of domain
-resX: 2400
-resY: 4800
+resX: 1200
+resY: 2400
 # restartSim : set to true to restart form checkpoint from outputFolder.
 restartSim: false
 # realTimePlot : set to true to plot results during simulation.
@@ -18,7 +18,7 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: false
 # outputFolder : folder for storing results, checkpoints and config filesoutputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_plume_Debug/VK_BC_NN_Re_500"
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_VK/VK_Hybrid_Re_100_IK_2400v4800_Cp"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_VK/MS_Analysis/VK_NN_Re_300_1200_2400"
 # simMethod: choose convnet or jacobi or PCG
 simMethod: "convnet"
 # modelDir : location of trained model
@@ -27,11 +27,11 @@ modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA"
 # modelFilename : name of trained model
 modelFilename: "convModel"
 # dt : simualation timestep
-dt: 3.0
+dt: 1.5
 # statIter : iterations frequency for output
-statIter: 25
+statIter: 10
 # maxIter : maximum number of simulation iterations
-maxIter: 40000
+maxIter: 25000
 # maccormackStrength : used in semi-lagrangian MacCormack advection
 # when LT div is activated. 0.6 is a good value. If ~1, can lead to
 # high frequency artifacts.
@@ -55,14 +55,14 @@ correctScalar: false
 # viscosity : introduces a viscous term in moment equation.
 # Algortihm taken from the book "Fluid Simulation for Computer Graphics" by
 # Bridson
-viscosity: 0.04
+viscosity: 0.013333333
 # operatingDensity : When applying buoyancy, buoyancyScale is multiplied
 # by (density(i,j) - operatingDensity)
 operatingDensity: 0.0
 # pTol : convergence criterion for Jacobi method
 pTol: 0.00
 # jacobiIter : maximum number of iterations for Jacobi method
-jacobiIter: 200
+jacobiIter: 1000
 # gravityVec : orientation of the gravity vector when buoyancy/gravity 
 # are present.
 gravityVec:
@@ -74,7 +74,7 @@ injectionDensity: 0.0
 # sourceRadius : radius of inlet zone w.r.t the center of x-axis
 sourceRadius: 0.145
 # injectionVelocity : inlet velocity
-injectionVelocity: 0.0666666666666666
+injectionVelocity: 0.1333333
 # Extra parameters for lib.simulate
 #If True we will update the divergency outside the Box!
 outside_Ja: False

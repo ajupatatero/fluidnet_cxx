@@ -55,22 +55,22 @@ class _ConvBlock2(nn.Module):
     def __init__(self, in_channels, mid1_channels, mid2_channels,mid3_channels, out_channels,dropout=False):
         super(_ConvBlock2, self).__init__()
         layers = [
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(in_channels, mid1_channels, kernel_size=5),
             nn.ReLU(inplace=True),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(mid1_channels, mid2_channels, kernel_size=3),
             nn.ReLU(),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(mid2_channels,mid3_channels,kernel_size = 3),
             nn.ReLU(),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(mid3_channels,mid2_channels,kernel_size = 3),
             nn.ReLU(),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(mid2_channels,mid1_channels,kernel_size = 3),
         ]
-        layers.append(nn.ReplicationPad2d(1))
+        layers.append(nn.ReflectionPad2d(1))
         layers.append(nn.Conv2d(mid1_channels, out_channels, kernel_size = 3))
         self.encode = nn.Sequential(*layers)
 
@@ -127,12 +127,16 @@ class MultiScaleNet(nn.Module):
         self.final = nn.Conv2d(8,1, kernel_size = 1)
 
     def forward(self, x):
+        align = False
         quarter_size = [int(i*0.25) for i in list(x.size()[2:])]
         half_size = [int(i*0.5) for i in list(x.size()[2:])]
-        convN_4out = self.convN_4(F.upsample(x,(quarter_size),mode = 'bilinear'))
-        convN_2out = self.convN_2( torch.cat((F.upsample(x,(half_size),mode = 'bilinear'),
-                                         F.upsample(convN_4out,(half_size),mode = 'bilinear')),dim = 1) )
-        convN_1out = self.convN_1( torch.cat((F.upsample(x,(x.size()[2:]),mode = 'bilinear'),
-                                         F.upsample(convN_2out,(x.size()[2:]),mode = 'bilinear')),dim = 1) )
-        final_out = self.final(convN_1out)
+        convN_4out = self.convN_4(F.interpolate(x,(quarter_size),mode = 'bilinear',align_corners=align))
+        convN_2out = self.convN_2( torch.cat((F.interpolate(x,(half_size),mode = 'bilinear',align_corners=align),
+                                         F.interpolate(convN_4out,(half_size),mode = 'bilinear',align_corners=align)),dim = 1) )
+        convN_1out = self.convN_1( torch.cat((F.interpolate(x,(x.size()[2:]),mode = 'bilinear',align_corners=align),
+                                         F.interpolate(convN_2out,(x.size()[2:]),mode = 'bilinear',align_corners=align)),dim = 1) )
+        #final_out = self.final(convN_1out)
+        final_out = torch.cat((self.final(convN_1out),F.interpolate(convN_2out,(x.size()[2:]),mode = 'bilinear',align_corners=align),
+                                        F.interpolate(F.interpolate(convN_4out,(half_size),mode = 'bilinear',align_corners=align),(x.size()[2:]),mode = 'bilinear',align_corners=align)),dim=1)
+
         return final_out

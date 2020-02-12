@@ -6,3 +6,4 @@ from .Model_TGV import FluidNetTGV
 from .simulate import simulate
 from .plot_field import plotField
 from .argument_parser import SmartFormatter
+from .MS_Analysis import MS_Analysis 
