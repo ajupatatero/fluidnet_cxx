@@ -157,6 +157,7 @@ def solveLinearSystemCG(flags, pressure, div, A_val, I_A, J_A,is_3d=False, p_tol
     div_vec_t = torch.FloatTensor(torch.flatten(div[0,0,0].cpu()))
     div_vec = div_vec_t.clone()
 
+    
     fluidnet_cpp.solve_linear_system_CG(flags, div_vec, A_val, I_A, J_A, pressure, residual, is_3d, \
             p_tol, max_iter, verbose)
 

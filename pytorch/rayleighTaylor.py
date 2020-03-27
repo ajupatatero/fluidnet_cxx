@@ -199,7 +199,7 @@ try:
         it = 0
 
         # Initialize and save the model
-        net = model_saved.FluidNet(mconf, it, dropout=False)
+        net = model_saved.FluidNet(mconf, it, folder, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
         net.load_state_dict(state['state_dict'])

@@ -1,5 +1,3 @@
-# Step Simulation Ekhi Ajuria 
-
 import glob
 import argparse
 import yaml
@@ -65,12 +63,20 @@ parser.add_argument('-sT','--setThreshold',
 parser.add_argument('-delT','--setdt',
         help='R|Sets the dt.\n'
         'Default: written in simConf file.', type =float)
+parser.add_argument('-dY','--dis_y',
+        help='R|Sets the number of diameters between cylinders -1.\n'
+        'If 0 = 0, if = 2, 2 diametersb between centers, or 1 between borders.\n'
+        'Default: written in simConf file.', type =int)
+parser.add_argument('-dX','--dis_x',
+        help='R|Sets the number of diameters between cylinders -1.\n'
+        'If 0 = 0, if = 2, 2 diametersb between centers, or 1 between borders.\n'
+        'Default: written in simConf file.', type =int)
 
 #Cylinder Test
-parser.add_argument('--Step',
+parser.add_argument('--Cylinder',
         default=True,
-        help='R|Includes a Step in the domain.\n'
-        'Default: True')
+        help='R|Includes a cylinder in the domain.\n'
+        'Default: Trye--ue')
 
 
 arguments = parser.parse_args()
@@ -86,10 +92,10 @@ if not arguments.restartSim:
 else:
     restart_sim = arguments.restartSim
 
-if not arguments.Step:
-    Step = True
+if not arguments.Cylinder:
+    Cylinder = True
 else:
-    Step = arguments.Step
+    Cylinder = arguments.Cylinder
 
 folder = arguments.outputFolder or simConf['outputFolder']
 if (not glob.os.path.exists(folder)):
@@ -155,38 +161,65 @@ try:
         it = 0
         cuda = torch.device('cuda')
 
-        net = model_saved.FluidNet(mconf, it, dropout=False)
+        net = model_saved.FluidNet(mconf, it, folder, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
 
         net.load_state_dict(state['state_dict'])
 
         #*********************** Simulation parameters **************************
-        
-        # We declare the size of the Step
-        Long_S_X = 64
-        Long_S_Y = 512
-        
-
-
+         
         resX = simConf['resX']
         resY = simConf['resY']
 
+        # We declare the center and radius of the first cylinder
+        centerX = np.int(resX/2)
+        centerY = np.int(resX/2)
+        radCyl = np.int(resX/80)
+
+        # As well as the distance between the center of the first and second cylinder 
+        # for both coordinates
+        diam_y = arguments.dis_y or simConf['diamY']
+        diam_x = arguments.dis_x or simConf['diamX']
+        
+        # Just to make sure
+        print("Diameters in X = ", diam_x, " Diameters in Y = ", diam_y)
+
+        y_distance = np.int((2*radCyl)*(diam_y))
+        x_distance = np.int((2*radCyl)*(diam_x))
+
+        print( "Center X ", centerX, " Y ", centerY, " and Center ", radCyl)
+
         p =       torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         U =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
-        Ustar =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
         flags =   torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         density = torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
-        div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
+
+        Div_analysis = False
+        if Div_analysis:
+            print("Div_analysis = True ", Div_analysis)
+            Ustar =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
+            div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
+            batch_dict['Ustar'] = Ustar
+            batch_dict['Div_in']= div_input
 
         fluid.emptyDomain(flags)
         batch_dict = {}
         batch_dict['p'] = p
         batch_dict['U'] = U
-        batch_dict['Ustar'] = Ustar
         batch_dict['flags'] = flags
         batch_dict['density'] = density
-        batch_dict['Div_in']= div_input
+
+        Div_analysis = False
+        if Div_analysis:
+            print("Div_analysis = True ", Div_analysis)
+            Ustar =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
+            div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
+            batch_dict['Ustar'] = Ustar
+            batch_dict['Div_in']= div_input
+
+        batch_dict['Test_case']= 'VK'
+
         #We create a temporary flags for the inflow, in order to avoid affecting the advection
         #flags_i = flags.clone()
         #batch_dict['flags_inflow'] = flags_i
@@ -207,36 +240,77 @@ try:
         rad = simConf['sourceRadius']
         plume_scale = simConf['injectionVelocity']
 
+        #Only foer the VK
+
+        batch_dict['VK']= plume_scale
+
         #**************************** Initial conditions ***************************
 
-        fluid.createStepBCs(batch_dict, rho1, plume_scale, rad, resX, Long_S_X)
+        fluid.createVKBCs(batch_dict, rho1, plume_scale, rad)
 
-        print("Step ", Step)
 
-        if Step: 
+        print("Cylinder", Cylinder)
+
+        if Cylinder: 
     
            """
-           Creates a cilinder in the flags. It will be located in the point x = 64 and y = 80. 
-           Radius = 10
+           Creates two cylinders in the flags.
+           Its location and separation is defined in lines 168-175 
            """
            
            flags = batch_dict['flags']
            X = torch.arange(0, resX, device=cuda).view(resX).expand((1,resY,resX))
            Y = torch.arange(0, resY, device=cuda).view(resY, 1).expand((1,resY,resX))
 
-           mask_step_x = X>(resX-Long_S_X)
-           mask_step_y = Y<Long_S_Y
+           dist_from_center = (X - centerX).pow(2) + (Y-centerY).pow(2)
+           dist_from_center_2 = (X - (centerX+x_distance)).pow(2) + (Y-(centerY+y_distance)).pow(2)
+           mask_cylinder = torch.min(dist_from_center, dist_from_center_2) <= radCyl * radCyl
 
-           mask_step = mask_step_x * mask_step_y
+           flags = flags.masked_fill_(mask_cylinder, 2)
 
-           flags = flags.masked_fill_(mask_step, 2)
 
         # Initial field = cte.!
 
         U = batch_dict['U']
-        U[:,1]+=plume_scale
+        U[:,1,:]+=plume_scale
+        U[:,0,:]+=plume_scale/5
         batch_dict['U'] = U
-                  
+        
+        # Creation of Matrix A
+        if mconf['simMethod']=='CG':
+
+            #A = fluid.createMatrixA(flags)
+            #A_val, I_A, J_A = fluid.CreateCSR(A)
+            #A_val, I_A, J_A = fluid.CreateCSR_scipy(A)
+
+            print("--------------------------------------------------------------")
+            print("------------------- A matrix creation ------------------------")
+            print("--------------------------------------------------------------")
+
+            #if glob.os.path.isfile(folder+"/A_val.npy"):
+
+            #    print("A val already exists! ")
+            #    print("Loaded!")
+            #    A_val = np.load(folder + '/A_val.npy')
+            #    I_A = np.load(folder+'/I_A.npy')
+            #    J_A = np.load(folder+'/J_A.npy')
+
+            #else:
+
+            A_val, I_A, J_A = fluid.CreateCSR_Direct(flags)
+
+            filenameA = folder + '/A_val'
+            np.save(filenameA,A_val)
+            filenameI = folder + '/I_A'
+            np.save(filenameI,I_A)
+            filenameJ = folder + '/J_A'
+            np.save(filenameJ,J_A)
+
+
+            batch_dict['Val']= A_val
+            batch_dict['IA']= I_A
+            batch_dict['JA']= J_A
+
         #XXX: Create Box2D and Cylinders from YAML config file
         # Uncomment to create Cylinder or Box2D obstacles
         #fluid.createCylinder(batch_dict, centerX=0.5*resX,
@@ -323,18 +397,62 @@ try:
         Max_Div_All = np.zeros(max_iter)
         time_big = np.zeros(max_iter)
 
+        # Probe and Plotting
+        Probe_U_y_1 = np.zeros(max_iter)
+        Probe_U_y_2 = np.zeros(max_iter)
+        Probe_U_x = np.zeros(max_iter)
+        range_plt = np.arange(max_iter)
+
         # Main loop
         while (it < max_iter):
-            #if it < 750:
-            #    method = 'jacobi'
-            #else:
-            method = mconf['simMethod']
-            #(mconf, batch_dict, net, sim_method, Time_vec, folder, it, output_div=False)
+
+            #Save 2 Previous U
+            if it == 1:
+
+                tensor_vel_prev = fluid.getCentered(batch_dict['U'].clone())
+                inter_tensors = tensor_vel_prev.clone().expand(2,1,3,1, resY,resX)
+                both_tensors= torch.zeros_like(inter_tensors)
+                both_tensors[1]=tensor_vel_prev
+
+                img_norm_vel_prev = torch.squeeze(torch.norm(tensor_vel_prev,
+                    dim=1, keepdim=True)).cpu().data.numpy()
+                img_velx_prev = torch.squeeze(tensor_vel_prev[:,0]).cpu().data.numpy()
+                img_vely_prev = torch.squeeze(tensor_vel_prev[:,1]).cpu().data.numpy()
+
+            elif it>1: 
+
+                both_tensors[0] = both_tensors[1].clone()
+                tensor_vel_prev = fluid.getCentered(batch_dict['U'].clone())
+                img_norm_vel_prev = torch.squeeze(torch.norm(tensor_vel_prev,
+                    dim=1, keepdim=True)).cpu().data.numpy()
+                both_tensors[1]= tensor_vel_prev.clone()
+
+                prev_p = torch.squeeze(batch_dict['p'].clone()).cpu().data.numpy()
+    
+                img_velx_prev = torch.squeeze(both_tensors[1,:,0]).cpu().data.numpy()
+                img_vely_prev = torch.squeeze(both_tensors[1,:,0]).cpu().data.numpy()
+
+                img_velx_prev_2 = torch.squeeze(both_tensors[0,:,0]).cpu().data.numpy()
+                img_vely_prev_2 = torch.squeeze(both_tensors[0,:,1]).cpu().data.numpy()
+
+ 
             start_big = default_timer()
             #lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres, Jacobi_switch, Max_Div, Max_Div_All, folder, it)
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
+
             end_big = default_timer()
             time_big[it] = (end_big - start_big)
+
+            # Store the elapsed time for the whole simulate in one it:
+            print("Simulate module elapsed time: ===================>", (end_big - start_big))
+
+
+            # Hard coded, Probe value for the Strouhal number, always situated at 15 diameters from the cylinder
+
+            Probe_U_y_1[it]=batch_dict['U'][0,0,0,centerY+4*radCyl,centerX].cpu().data.numpy()
+            Probe_U_y_2[it]=batch_dict['U'][0,0,0,centerY+y_distance+4*radCyl,centerX+x_distance].cpu().data.numpy()
+            Probe_U_x[it]=batch_dict['U'][0,1,0,centerY+4*radCyl,centerX].cpu().data.numpy()
+
             if (it% outIter == 0):
                 print("It = " + str(it))
                 tensor_div = fluid.velocityDivergence(batch_dict['U'].clone(),
@@ -362,6 +480,45 @@ try:
                 img_velx_masked = img_velx_masked.filled()
                 img_vely_masked = img_vely_masked.filled()
                 img_vel_norm_masked = img_vel_norm_masked.filled()
+
+                fla = batch_dict['flags'].clone()
+                f = torch.squeeze(fla).cpu().data.numpy()
+
+                filename12 = folder + '/Probe_U_y_1'
+                np.save(filename12,Probe_U_y_1)
+                filename13 = folder + '/Probe_U_y_2'
+                np.save(filename13,Probe_U_y_2)
+                filename14 = folder + '/Probe_U_x'
+                np.save(filename14,Probe_U_x)
+                filename_big = folder + '/Time_big'
+                np.save(filename_big,time_big)
+
+                if it > 17500:
+                    save_vtk = True
+
+                    filename2 = folder + '/P_output_{0:05}'.format(it-1)
+                    np.save(filename2,prev_p[minY:maxY,minX:maxX])
+
+                    filename3 = folder + '/P_output_{0:05}'.format(it)
+                    np.save(filename3,p[minY:maxY,minX:maxX])
+                    filename4 = folder + '/sh_output_{0:05}'.format(it)
+                    np.save(filename4,f[minY:maxY,minX:maxX])
+
+                    filename5 = folder + '/Ux_NN_output_{0:05}'.format(it)
+                    np.save(filename5,img_velx[minY:maxY,minX:maxX])
+                    filename6 = folder + '/Uy_NN_output_{0:05}'.format(it)
+                    np.save(filename6,img_vely[minY:maxY,minX:maxX])
+
+                    filename7 = folder + '/Ux_NN_output_{0:05}'.format(it-1)
+                    np.save(filename7,img_velx_prev[minY:maxY,minX:maxX])
+                    filename8 = folder + '/Uy_NN_output_{0:05}'.format(it-1)
+                    np.save(filename8,img_vely_prev[minY:maxY,minX:maxX])            
+
+                    filename9 = folder + '/Ux_NN_output_{0:05}'.format(it-2)
+                    np.save(filename9,img_velx_prev_2[minY:maxY,minX:maxX])
+                    filename10 = folder + '/Uy_NN_output_{0:05}'.format(it-2)
+                    np.save(filename10,img_vely_prev_2[minY:maxY,minX:maxX])                    
+
 
                 if real_time:
                     cax_rho.clear()
@@ -438,6 +595,7 @@ try:
                     #fig.canvas.draw()
                     filename = folder + '/output_{0:05}.png'.format(it)
                     fig.savefig(filename)
+                
 
                 if save_vtk:
                     px, py = 1580, 950
