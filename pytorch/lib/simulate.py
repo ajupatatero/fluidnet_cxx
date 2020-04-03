@@ -107,11 +107,17 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     # Get p, U, flags and density from batch.
     p = batch_dict['p']
     U = batch_dict['U']
-    Ustar = batch_dict['Ustar']
     flags = batch_dict['flags']
-   
+
+    Div_analysis = batch_dict.get('Div_analysis', True)
+
+    if Div_analysis:
+        Ustar = batch_dict['Ustar']
+
     #flags_i = batch_dict['flags_inflow']  
 
+    # Activate in future tests
+    '''
     if (it% 1 == 0):
         U_inx = U.clone()
         Uinter1_cpu = U_inx.cpu()
@@ -129,6 +135,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         filename_rhointer1 = folder + '/Rho_Before_Advection_{0:05}'.format(it)
         #np.save(filename_rhointer1,Rhointer_cpu)
 
+    '''
 
     stick = False
     if 'flags_stick' in batch_dict:
@@ -160,6 +167,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         density = torch.zeros_like(flags)
 
 
+    #Activate in future tests
+    '''
     if (it% 1 == 0):
         U_inx = U.clone()
         Uinter1_cpu = U_inx.cpu()
@@ -174,6 +183,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         Rhointer_cpu = Rho_inx.cpu()
         filename_rhointer1 = folder + '/Rho_After_Rho_Advection_{0:05}'.format(it)
         #np.save(filename_rhointer1,Rhointer_cpu)
+    '''
 
     flags_only= flags.clone()
 
@@ -291,7 +301,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
     div = fluid.velocityDivergence(U, flags)
     Advected_Div = (abs(div).max()).item()
 
-
+    # Activate in future tests
+    '''
     #Print Before U
     if (it% 1 == 0):    
         U_inx = U.clone()
@@ -308,9 +319,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         filename_rhointer1 = folder + '/Rho_After_Advection_{0:05}'.format(it)
         #np.save(filename_rhointer1,Rhointer_cpu)
 
+    '''
 
     # Save velocity field after the advection step!
-    Ustar = U.clone()
+    if Div_analysis:
+        Ustar = U.clone()
    
     #Timing for the whole P solving
     start_Pres = default_timer()
@@ -343,8 +356,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             print("Div after initial correction: ", Advected_Div)
 
         div = fluid.velocityDivergence(U, flags)
-        div_input = div.clone()
-        batch_dict['Div_in'] = div_input
+
+        if Div_analysis:
+            div_input = div.clone()
+            batch_dict['Div_in'] = div_input
 
 
         # It might be strait forward ... BUT remember that the model is saved in:
@@ -395,8 +410,9 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         h = div.size(3)
         w = div.size(4)
 
-        div_input = div.clone()
-        batch_dict['Div_in'] = div_input
+        if Div_analysis:
+            div_input = div.clone()
+            batch_dict['Div_in'] = div_input
 
         is3D = (U.size(2) > 1)
         pTol = mconf['pTol']
@@ -450,8 +466,9 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         J_A = batch_dict['JA']
 
         #Input
-        div_input = div.clone()
-        batch_dict['Div_in'] = div_input
+        if Div_analysis:
+            div_input = div.clone()
+            batch_dict['Div_in'] = div_input
 
         #Timing Test
         start = default_timer()
@@ -499,8 +516,9 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
 
         #Input
-        div_input= batch_dict['Div_in']
-        div_input = div.clone()
+        if Div_analysis:
+            div_input= batch_dict['Div_in']
+            div_input = div.clone()
 
         #Timing Test
         start = default_timer()
@@ -718,8 +736,10 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 U[:,0,:,:,-1] = -U_temp[:,0,:,:,1]
 
 
-    batch_dict['Ustar'] = Ustar
+    if Div_analysis:
+        batch_dict['Ustar'] = Ustar
+        batch_dict['Div_in']= div_input
+
     batch_dict['U'] = U
     batch_dict['density'] = density
-    batch_dict['p'] = p
-    batch_dict['Div_in']= div_input
+    batch_dict['p'] = p 

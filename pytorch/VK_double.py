@@ -175,7 +175,7 @@ try:
         # We declare the center and radius of the first cylinder
         centerX = np.int(resX/2)
         centerY = np.int(resX/2)
-        radCyl = np.int(resX/80)
+        radCyl = np.int(resX/40)
 
         # As well as the distance between the center of the first and second cylinder 
         # for both coordinates
@@ -195,14 +195,6 @@ try:
         flags =   torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         density = torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
 
-        Div_analysis = False
-        if Div_analysis:
-            print("Div_analysis = True ", Div_analysis)
-            Ustar =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
-            div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
-            batch_dict['Ustar'] = Ustar
-            batch_dict['Div_in']= div_input
-
         fluid.emptyDomain(flags)
         batch_dict = {}
         batch_dict['p'] = p
@@ -211,12 +203,15 @@ try:
         batch_dict['density'] = density
 
         Div_analysis = False
+        batch_dict['Div_analysis'] = Div_analysis
         if Div_analysis:
             print("Div_analysis = True ", Div_analysis)
             Ustar =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
             div_input =  torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
             batch_dict['Ustar'] = Ustar
             batch_dict['Div_in']= div_input
+        else:
+            print("Div_analysis = False ", Div_analysis)
 
         batch_dict['Test_case']= 'VK'
 
@@ -236,6 +231,9 @@ try:
         max_iter = simConf['maxIter']
         outIter = simConf['statIter']
 
+        save_cp = simConf.get('saveCp')
+        it_saving = np.int(max_iter-100*outIter-5)
+       
         rho1 = simConf['injectionDensity']
         rad = simConf['sourceRadius']
         plume_scale = simConf['injectionVelocity']
@@ -406,6 +404,7 @@ try:
         # Main loop
         while (it < max_iter):
 
+            
             #Save 2 Previous U
             if it == 1:
 
@@ -430,12 +429,12 @@ try:
                 prev_p = torch.squeeze(batch_dict['p'].clone()).cpu().data.numpy()
     
                 img_velx_prev = torch.squeeze(both_tensors[1,:,0]).cpu().data.numpy()
-                img_vely_prev = torch.squeeze(both_tensors[1,:,0]).cpu().data.numpy()
+                img_vely_prev = torch.squeeze(both_tensors[1,:,1]).cpu().data.numpy()
 
                 img_velx_prev_2 = torch.squeeze(both_tensors[0,:,0]).cpu().data.numpy()
                 img_vely_prev_2 = torch.squeeze(both_tensors[0,:,1]).cpu().data.numpy()
 
- 
+            
             start_big = default_timer()
             #lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres, Jacobi_switch, Max_Div, Max_Div_All, folder, it)
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
@@ -493,7 +492,7 @@ try:
                 filename_big = folder + '/Time_big'
                 np.save(filename_big,time_big)
 
-                if it > 17500:
+                if it > it_saving and save_cp:
                     save_vtk = True
 
                     filename2 = folder + '/P_output_{0:05}'.format(it-1)
@@ -618,17 +617,13 @@ try:
                     z = np.zeros(1, dtype='float32')
 
                     # Variables
-                    div_input = batch_dict['Div_in'][0,0].clone()
                     div = fluid.velocityDivergence(\
                         batch_dict['U'].clone(), \
                         batch_dict['flags'].clone())[0,0]
-                    velstar_div = fluid.velocityDivergence(\
-                        batch_dict['Ustar'].clone(), \
-                        batch_dict['flags'].clone())[0,0]
                     vel = fluid.getCentered(batch_dict['U'].clone())
-                    velstar = fluid.getCentered(batch_dict['Ustar'].clone())
                     density = batch_dict['density'].clone()
                     pressure = batch_dict['p'].clone()
+
                     b = 1
                     w = pressure.size(4)
                     h = pressure.size(3)
@@ -657,8 +652,6 @@ try:
 
                     velX = vel[0,0].clone()
                     velY = vel[0,1].clone()
-                    velstarX = velstar[0,0].clone()
-                    velstarY = velstar[0,1].clone()
                     gradRhoX = gradRho_center[0,0].clone()
                     gradRhoY = gradRho_center[0,1].clone()
                     gradPX = gradP_center[0,0].clone()
@@ -667,14 +660,10 @@ try:
 
                     # Change shape form (D,H,W) to (W,H,D)
                     div.transpose_(0,2).contiguous()
-                    div_input.transpose_(0,2).contiguous()
-                    velstar_div.transpose_(0,2).contiguous()
                     density.transpose_(0,2).contiguous()
                     pressure.transpose_(0,2).contiguous()
                     velX.transpose_(0,2).contiguous()
                     velY.transpose_(0,2).contiguous()
-                    velstarX.transpose_(0,2).contiguous()
-                    velstarY.transpose_(0,2).contiguous()
                     gradRhoX.transpose_(0,2).contiguous()
                     gradRhoY.transpose_(0,2).contiguous()
                     gradPX.transpose_(0,2).contiguous()
@@ -682,58 +671,89 @@ try:
                     flags.transpose_(0,2).contiguous()
 
                     div_np = div.cpu().data.numpy()
-                    div_input_np = div_input.cpu().data.numpy()
-                    velstardiv_np = velstar_div.cpu().numpy()
                     density_np = density.cpu().data.numpy()
                     pressure_np = pressure.cpu().data.numpy()
                     velX_np = velX.cpu().data.numpy()
                     velY_np = velY.cpu().data.numpy()
-                    velstarX_np = velstarX.cpu().data.numpy()
-                    velstarY_np = velstarY.cpu().data.numpy()
                     np_mask = flags.eq(2).cpu().data.numpy().astype(float)
                     pressure_masked = ma.array(pressure_np, mask=np_mask)
                     velx_masked = ma.array(velX_np, mask=np_mask)
                     vely_masked = ma.array(velY_np, mask=np_mask)
-                    velstarx_masked = ma.array(velstarX_np, mask=np_mask)
-                    velstary_masked = ma.array(velstarY_np, mask=np_mask)
                     ma.set_fill_value(pressure_masked, np.nan)
                     ma.set_fill_value(velx_masked, np.nan)
                     ma.set_fill_value(vely_masked, np.nan)
                     pressure_masked = pressure_masked.filled()
                     velx_masked = velx_masked.filled()
                     vely_masked = vely_masked.filled()
-                    velstarx_masked = velstarx_masked.filled()
-                    velstary_masked = velstary_masked.filled()
 
                     divergence = np.ascontiguousarray(div_np[minX:maxX,minY:maxY])
-                    divergence_input=np.ascontiguousarray(div_input_np[minX:maxX,minY:maxY])
                     rho = np.ascontiguousarray(density_np[minX:maxX,minY:maxY])
                     p = np.ascontiguousarray(pressure_masked[minX:maxX,minY:maxY])
                     velx = np.ascontiguousarray(velx_masked[minX:maxX,minY:maxY])
                     vely = np.ascontiguousarray(vely_masked[minX:maxX,minY:maxY])
-                    velstarx = np.ascontiguousarray(velstarx_masked[minX:maxX,minY:maxY])
-                    velstary = np.ascontiguousarray(velstary_masked[minX:maxX,minY:maxY])
-                    velstardiv = np.ascontiguousarray(velstardiv_np[minX:maxX,minY:maxY])
                     gradRhox = np.ascontiguousarray(gradRhoX.cpu().data.numpy()[minX:maxX,minY:maxY])
                     gradRhoy = np.ascontiguousarray(gradRhoY.cpu().data.numpy()[minX:maxX,minY:maxY])
                     gradPx = np.ascontiguousarray(gradPX.cpu().data.numpy()[minX:maxX,minY:maxY])
                     gradPy = np.ascontiguousarray(gradPY.cpu().data.numpy()[minX:maxX,minY:maxY])
+
+                    if Div_analysis:
+                        div_input = batch_dict['Div_in'][0,0].clone()
+                        div_input.transpose_(0,2).contiguous()
+                        div_input_np = div_input.cpu().data.numpy()
+                        divergence_input=np.ascontiguousarray(div_input_np[minX:maxX,minY:maxY])
+
+                        velstar_div = fluid.velocityDivergence(\
+                            batch_dict['Ustar'].clone(), \
+                            batch_dict['flags'].clone())[0,0]
+                        velstar = fluid.getCentered(batch_dict['Ustar'].clone())
+                        velstarX = velstar[0,0].clone()
+                        velstarY = velstar[0,1].clone()
+                        velstarX.transpose_(0,2).contiguous()
+                        velstarY.transpose_(0,2).contiguous()
+                        velstar_div.transpose_(0,2).contiguous()
+                        velstardiv_np = velstar_div.cpu().numpy()
+                        velstarX_np = velstarX.cpu().data.numpy()
+                        velstarY_np = velstarY.cpu().data.numpy()
+                        velstarx_masked = ma.array(velstarX_np, mask=np_mask)
+                        velstary_masked = ma.array(velstarY_np, mask=np_mask)
+                        velstarx_masked = velstarx_masked.filled()
+                        velstary_masked = velstary_masked.filled()
+
+                        velstarx = np.ascontiguousarray(velstarx_masked[minX:maxX,minY:maxY])
+                        velstary = np.ascontiguousarray(velstary_masked[minX:maxX,minY:maxY])
+                        velstardiv = np.ascontiguousarray(velstardiv_np[minX:maxX,minY:maxY])
+
+
                     filename = folder + '/output_{0:05}'.format(it)
-                    vtk.gridToVTK(filename, x, y, z, cellData = {
-                        'density': rho,
-                        'divergence': divergence,
-                        'pressure' : p,
-                        'ux' : velx,
-                        'uy' : vely,
-                        'u_star_x' : velstarx,
-                        'u_star_y' : velstary,
-                        'u_star_div' : velstardiv,
-                        'divergence_input': divergence_input,
-                        'gradPx' : gradPx,
-                        'gradPy' : gradPy,
-                        'gradRhox' : gradRhox,
-                        'gradRhoy' : gradRhoy
-                        })
+
+                    if Div_analysis:
+                        vtk.gridToVTK(filename, x, y, z, cellData = {
+                            'density': rho,
+                            'divergence': divergence,
+                            'pressure' : p,
+                            'ux' : velx,
+                            'uy' : vely,
+                            'u_star_x' : velstarx,
+                            'u_star_y' : velstary,
+                            'u_star_div' : velstardiv,
+                            'divergence_input': divergence_input,
+                            'gradPx' : gradPx,
+                            'gradPy' : gradPy,
+                            'gradRhox' : gradRhox,
+                            'gradRhoy' : gradRhoy
+                            })
+                    else: 
+                        vtk.gridToVTK(filename, x, y, z, cellData = {
+                            'density': rho,
+                            'divergence': divergence,
+                            'pressure' : p,
+                            'ux' : velx,
+                            'uy' : vely,
+                            'gradPx' : gradPx,
+                            'gradPy' : gradPy,
+                            'gradRhox' : gradRhox,
+                            'gradRhoy' : gradRhoy
+                            })
 
                 restart_dict = {'batch_dict': batch_dict, 'it': it}
                 torch.save(restart_dict, restart_state_file)
