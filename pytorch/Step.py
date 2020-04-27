@@ -155,7 +155,7 @@ try:
         it = 0
         cuda = torch.device('cuda')
 
-        net = model_saved.FluidNet(mconf, it, dropout=False)
+        net = model_saved.FluidNet(mconf, it, folder, dropout=False)
         if torch.cuda.is_available():
             net = net.cuda()
 
@@ -163,14 +163,12 @@ try:
 
         #*********************** Simulation parameters **************************
         
-        # We declare the size of the Step
-        Long_S_X = 64
-        Long_S_Y = 512
-        
-
-
         resX = simConf['resX']
         resY = simConf['resY']
+
+        # We declare the size of the Step
+        Long_S_X = resX//2
+        Long_S_Y = 20*resX//2
 
         p =       torch.zeros((1,1,1,resY,resX), dtype=torch.float).cuda()
         U =       torch.zeros((1,2,1,resY,resX), dtype=torch.float).cuda()
@@ -191,6 +189,9 @@ try:
         #flags_i = flags.clone()
         #batch_dict['flags_inflow'] = flags_i
 
+        # Add Test case
+        batch_dict['Test_case']= 'Step'
+
         real_time = simConf['realTimePlot']
         save_vtk = simConf['saveVTK']
         method = simConf['simMethod']
@@ -203,11 +204,14 @@ try:
         max_iter = simConf['maxIter']
         outIter = simConf['statIter']
 
+        it_saving = np.int(max_iter-20*outIter-5)
+
         rho1 = simConf['injectionDensity']
         rad = simConf['sourceRadius']
         plume_scale = simConf['injectionVelocity']
 
         #**************************** Initial conditions ***************************
+        batch_dict['Step']= plume_scale
 
         fluid.createStepBCs(batch_dict, rho1, plume_scale, rad, resX, Long_S_X)
 
@@ -236,7 +240,42 @@ try:
         U = batch_dict['U']
         U[:,1]+=plume_scale
         batch_dict['U'] = U
-                  
+
+        # Creation of Matrix A
+        if mconf['simMethod']=='CG':
+
+            #A = fluid.createMatrixA(flags)
+            #A_val, I_A, J_A = fluid.CreateCSR(A)
+            #A_val, I_A, J_A = fluid.CreateCSR_scipy(A)
+
+            print("--------------------------------------------------------------")
+            print("------------------- A matrix creation ------------------------")
+            print("--------------------------------------------------------------")
+
+            #if glob.os.path.isfile(folder+"/A_val.npy"):
+
+            #    print("A val already exists! ")
+            #    print("Loaded!")
+            #    A_val = np.load(folder + '/A_val.npy')
+            #    I_A = np.load(folder+'/I_A.npy')
+            #    J_A = np.load(folder+'/J_A.npy')
+
+            #else:
+
+            A_val, I_A, J_A = fluid.CreateCSR_Direct(flags)
+
+            filenameA = folder + '/A_val'
+            np.save(filenameA,A_val)
+            filenameI = folder + '/I_A'
+            np.save(filenameI,I_A)
+            filenameJ = folder + '/J_A'
+            np.save(filenameJ,J_A)
+
+
+            batch_dict['Val']= A_val
+            batch_dict['IA']= I_A
+            batch_dict['JA']= J_A
+               
         #XXX: Create Box2D and Cylinders from YAML config file
         # Uncomment to create Cylinder or Box2D obstacles
         #fluid.createCylinder(batch_dict, centerX=0.5*resX,
@@ -335,6 +374,21 @@ try:
             lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
             end_big = default_timer()
             time_big[it] = (end_big - start_big)
+
+            filename6 = folder + '/Time_big'
+            np.save(filename6,time_big)
+            filename7 = folder + '/Jacobi_switch'
+            np.save(filename7,Jacobi_switch)
+            filename8 = folder + '/Max_Div'
+            np.save(filename8,Max_Div)
+            filename9 = folder + '/Max_Div_All'
+            np.save(filename9,Max_Div_All)
+            filename10 = folder + '/Time_vec'
+            np.save(filename10,Time_vec)
+            filename11 = folder + '/Time_Pres'
+            np.save(filename11,Time_Pres)
+
+
             if (it% outIter == 0):
                 print("It = " + str(it))
                 tensor_div = fluid.velocityDivergence(batch_dict['U'].clone(),
@@ -362,6 +416,9 @@ try:
                 img_velx_masked = img_velx_masked.filled()
                 img_vely_masked = img_vely_masked.filled()
                 img_vel_norm_masked = img_vel_norm_masked.filled()
+
+                if it > it_saving:
+                    save_vtk = True
 
                 if real_time:
                     cax_rho.clear()

@@ -141,7 +141,7 @@ def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
 
     cuda = torch.device('cuda')
     # batch_dict at input: {p, UDiv, flags, density, Ustar, Div_input}
-    assert len(batch_dict) == 8, "Batch must contain 8 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
+    #assert len(batch_dict) == 8, "Batch must contain 8 tensors (p, UDiv, flags, density, flags_inflow, Ustar, Div input)"
     UDiv = batch_dict['U']
     density = batch_dict['density']
     UBC = UDiv.clone().fill_(0)
@@ -174,11 +174,6 @@ def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
         vec = torch.arange(0,3, device=cuda).float()
         vec[2] = 0
 
-    # vec = vec * u_scale (vinj)
-    vec.mul_(u_scale)
-    print("V INJ = ", vec[1])
-    print("Scale", u_scale)
-
     # Equal to = vector size H, then reshaped to a matrix of size (H,1) and expanded
     index_x = torch.arange(0, xdim, device=cuda).view(xdim).expand_as(density[0][0])
     index_y = torch.arange(0, ydim, device=cuda).view(ydim, 1).expand_as(density[0][0])
@@ -190,33 +185,53 @@ def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
     else:
         index_ten = torch.stack((index_x, index_y, index_z), dim=0)
 
-    #TODO 3d implementation
-    indx_circle = index_ten[:,:,a:jl]
-    maskInside = (indx_circle[1] <= jl)
+    h_s = np.int(xdim/2.0)
 
+    input_U = -6.0*u_scale*(index_x)*(index_x-h_s)/(h_s*h_s)
+    input_U[:,:,h_s:-1]=0.0
+    output_U = -3.0*u_scale*(index_x)*(index_x-2.0*h_s)/(4.*(h_s*h_s))
+
+    BC_Uy = input_U
+    BC_Uy[:,ydim//2:,:] = output_U[:,ydim//2:,:]
+    BC_Uy[:,jl:ydim-jl-1,:] = 0.0
+
+    BC_Ux = torch.zeros_like(BC_Uy)
+
+
+    BC_U = torch.stack((BC_Ux, BC_Uy), dim=0)
+
+    #TODO 3d implementation
+    maskInside_in = (index_y[0,:,:] <= jl)
+    maskInside_out = (index_y[0,:,:] >= ydim - jl)
+
+    maskInside = maskInside_in + maskInside_out
     # Inside the plume. Set the BCs.
 
     #It is clearer to just multiply by mask (casted into Float)
     maskInside_f = maskInside.float().clone()
 
     #DEBUG
-    UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
-    #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
-    UBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
+    #UBC[:,:,:,a:jl] = maskInside_f * vec.view(1,2,1,1,1).expand_as(UBC[:,:,:,a:jl]).float()
 
-    densityBC[:,:,:,a:jl].masked_fill_(maskInside, density_val)
-    densityBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
+    UBC = BC_U.unsqueeze(0)
+
+    #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
+    #UBCInvMask[:,:,:,a:jl].masked_fill_(maskInside, 0)
+
+    densityBC[:,:,:,a:jl].masked_fill_(maskInside[a:jl], density_val)
+    densityBCInvMask[:,:,:,a:jl].masked_fill_(maskInside[a:jl], 0)
+
+
+    densityBC[:,:,:,-jl-1:].masked_fill_(maskInside[-jl-1:], density_val)
+    densityBCInvMask[:,:,:,-jl-1:].masked_fill_(maskInside[-jl-1:], 0)
 
     # Outside the plume. Set the velocity to zero and leave density alone.
 
     maskOutside = (maskInside == 0)
-    UBC[:,:,:,a:jl].masked_fill_(maskOutside, 0)
-    UBC[:,:,:,a:jl].masked_fill_(maskOutside, 0)
-    UBCInvMask[:,:,:,a:jl].masked_fill_(maskOutside, 0)
+    UBC.masked_fill_(maskOutside, 0)
+    UBCInvMask.masked_fill_(maskOutside, 0)
 
     #Outflow
-
-
     indx_circle = index_ten[:,:,-jl:]
     maskInside = (indx_circle[1] >= ydim-jl)
 
@@ -226,7 +241,6 @@ def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
     maskInside_f = maskInside.float().clone()
 
     #DEBUG
-    UBC[:,:,:,-jl:] = maskInside_f * (vec.view(1,2,1,1,1)*((resX-Long_S_X)/resX)).expand_as(UBC[:,:,:,-jl:]).float()
     #UBC[:,:,:,0:jl].masked_fill_(maskInside, u_scale)
     UBCInvMask[:,:,:,-jl:].masked_fill_(maskInside, 0)
     densityBCInvMask[:,:,:,-jl:].masked_fill_(maskInside, 0)
@@ -234,16 +248,8 @@ def createStepBCs(batch_dict, density_val, u_scale, rad, resX, Long_S_X):
     # Outside the plume. Set the velocity to zero and leave density alone.
 
     maskOutside = (maskInside == 0)
-    UBC[:,:,:,-jl:].masked_fill_(maskOutside, 0)
-    UBCInvMask[:,:,:,-jl:].masked_fill_(maskOutside, 0)
-
-
-    print("Inflow X ", UBC[0,0,0,1,100])
-    print("Outflow X ", UBC[0,0,0,-1,100])
-
-    print("Inflow ", UBC[0,1,0,1,100])
-    print("Outflow ", UBC[0,1,0,-1,100])
-
+    #UBC[:,:,:,-jl:].masked_fill_(maskOutside, 0)
+    #UBCInvMask[:,:,:,-jl:].masked_fill_(maskOutside, 0)
     # Insert the new tensors in the batch_dict.
     batch_dict['UBC'] = UBC
     batch_dict['UBCInvMask'] = UBCInvMask

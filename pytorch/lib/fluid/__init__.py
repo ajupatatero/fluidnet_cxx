@@ -2,6 +2,7 @@ from .cell_type import CellType
 from .grid import getDx, getCentered
 from .set_wall_bcs import setWallBcs
 from .set_wall_bcs_VK import setWallVKBcs
+from .set_wall_bcs_Step import setWallStepBcs
 from .set_wall_bcs_stick import setWallBcsStick
 from .flags_to_occupancy import flagsToOccupancy
 from .velocity_divergence import velocityDivergence

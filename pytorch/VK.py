@@ -160,7 +160,7 @@ try:
         net.load_state_dict(state['state_dict'])
 
         #*********************** Simulation parameters **************************
-         
+        mconf['pTol'] = simConf['threshold_Div'] 
         resX = simConf['resX']
         resY = simConf['resY']
 
@@ -432,6 +432,12 @@ try:
                 np.save(filename14,Probe_U_x)
                 filename_big = folder + '/Time_big'
                 np.save(filename_big,time_big)
+
+                it_saving = 18500
+                if it > it_saving:
+                    save_vtk = True
+                    filename5 = folder + '/Div_output_{0:05}'.format(it)
+                    np.save(filename5,div[minY:maxY,minX:maxX])
 
                 if it > 35000:
 

@@ -19,35 +19,70 @@ def setConstVals(batch_dict, p, U, flags, density):
 
     if ('UBCInvMask' in batch_dict) and ('UBC' in batch_dict):
 
-        # Zero out the U values on the BCs.
-        #U.mul_(batch_dict['UBCInvMask'])
+        if batch_dict['Test_case'] == 'Step':
 
-        Mask = batch_dict['densityBCInvMask']
-        # Ekhi 19/08/19 Parabolic Velocity profile
+            # Zero out the U values on the BCs.
+            #U.mul_(batch_dict['UBCInvMask'])
 
-        #Inside_cyl = (Mask[0,0,0,1,:].ne(1)).sum() 
-        #xdim = U.size(4)
-        #centerX = xdim // 2
-        #firstX = centerX - (Inside_cyl//2)
-        #lastX = centerX + (Inside_cyl//2) + 1
+            Mask = batch_dict['densityBCInvMask']
+            # Ekhi 19/08/19 Parabolic Velocity profile
 
-        #X = torch.arange(0, Inside_cyl)
-        #normalized_x = (X.float()/np.float(Inside_cyl-1))
-        #new_nor = (((normalized_x).unsqueeze(0)).unsqueeze(0)).unsqueeze(0)
-        #nor_2 = new_nor.expand_as(U[:,1,:,1:4,firstX:lastX])
+            U_sizes = batch_dict['U']
+            bsz = U_sizes.size(0)
+            d = U_sizes.size(2)
+            h = U_sizes.size(3)
+            w = U_sizes.size(4)
+           
+            i = torch.arange(start=0, end=w, dtype=torch.float) \
+                    .view(1,w).expand(bsz, d, h, w)
+            h_s = np.int(w/2.0)
+            u_scale = batch_dict['Step']
 
-        U[:,:,:,1:2,:]=0
-        U.mul_(batch_dict['densityBCInvMask'])
+            input_U = -6.0*u_scale*(i)*(i-h_s)/(h_s*h_s)
+            input_U[:,:,:,h_s:-1]=0.0
+            output_U = -3.0*u_scale*(i)*(i-2.0*h_s)/(4.*(h_s*h_s))
 
-        # Add back the values we want to specify.
+            U[:,1,:,1:5,1:-1]=input_U[:,:,1:5,1:-1]
+            U[:,1,:,-6:,1:-1]=output_U[:,:,-6:,1:-1]
 
-        ##### THIS LINE MAKES IT SQIUARE OR NOT
-        U.add_(batch_dict['UBC'])
 
-        #U[:,1,:,1:4,firstX:lastX]= 6*0.05*(nor_2)*(1-nor_2)
-        #U[:,1,:,1:4,firstX:lastX]=0.05
- 
-        batch_dict['U'] = U.clone()
+            #Inside_cyl = (Mask[0,0,0,1,:].ne(1)).sum() 
+            #xdim = U.size(4)
+            #centerX = xdim // 2
+            #firstX = centerX - (Inside_cyl//2)
+            #lastX = centerX + (Inside_cyl//2) + 1
+
+            #X = torch.arange(0, Inside_cyl)
+            #normalized_x = (X.float()/np.float(Inside_cyl-1))
+            #new_nor = (((normalized_x).unsqueeze(0)).unsqueeze(0)).unsqueeze(0)
+            #nor_2 = new_nor.expand_as(U[:,1,:,1:4,firstX:lastX])
+
+            #U[:,:,:,1:2,:]=0
+            #U.mul_(batch_dict['densityBCInvMask'])
+
+            # Add back the values we want to specify.
+
+            ##### THIS LINE MAKES IT SQIUARE OR NOT
+            #U.add_(batch_dict['UBC'])
+
+            #U[:,1,:,1:4,firstX:lastX]= 6*0.05*(nor_2)*(1-nor_2)
+            #U[:,1,:,1:4,firstX:lastX]=0.05
+
+            batch_dict['U'] = U.clone() 
+
+
+        else:
+
+            # Zero out the U values on the BCs.
+            #U.mul_(batch_dict['UBCInvMask'])
+            Mask = batch_dict['densityBCInvMask']
+            U[:,:,:,1:2,:]=0
+            U.mul_(batch_dict['densityBCInvMask'])
+
+            # Add back the values we want to specify.
+
+            U.add_(batch_dict['UBC'])
+            batch_dict['U'] = U.clone()
 
     if ('densityBCInvMask' in batch_dict) and ('densityBC' in batch_dict):
 
@@ -158,8 +193,8 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
                 method="eulerFluidNet", \
                 #method="maccormackFluidNet", \
                 boundary_width=1, sample_outside_fluid=sampleOutsideFluid, \
-                maccormack_strength=maccormackStrength)
-
+#                maccormack_strength=maccormackStrength)
+                )
         if mconf['correctScalar']:
             div = fluid.velocityDivergence(U, flags)
             fluid.correctScalar(dt, density, div, flags)
@@ -292,7 +327,12 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         BC_V = batch_dict['VK']
         U = fluid.setWallVKBcs(U, flags, BC_V)
 
-    # We add the BC i order to have Divergency in the border!
+    if batch_dict['Test_case'] == 'Step':
+        print("Step")
+        BC_V = batch_dict['Step']
+        U = fluid.setWallStepBcs(U, flags, BC_V)
+
+
     setConstVals(batch_dict, p, U, flags, density)
 
     batch_dict['U'] = U
@@ -371,7 +411,6 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
         data = torch.cat((p, U, flags, density), 1)
         p, U, time = net(data, it,folder)
        
-
         setConstVals(batch_dict, p, U, flags, density)
 
         #Special VK
@@ -379,6 +418,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             print("VK BC")
             BC_V = batch_dict['VK']
             U = fluid.setWallVKBcs(U, flags, BC_V)
+
+        if batch_dict['Test_case'] == 'Step':
+            print("Step")
+            BC_V = batch_dict['Step']
+            U = fluid.setWallStepBcs(U, flags, BC_V)
 
         U = batch_dict['U']
         
@@ -447,6 +491,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             BC_V = batch_dict['VK']
             U = fluid.setWallVKBcs(U, flags, BC_V)
 
+        if batch_dict['Test_case'] == 'Step':
+            print("Step")
+            BC_V = batch_dict['Step']
+            U = fluid.setWallStepBcs(U, flags, BC_V)
+
         #U = fluid.setWallVKBcs(U, flags)
         U = batch_dict['U']
 
@@ -503,6 +552,11 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             BC_V = batch_dict['VK']
             U = fluid.setWallVKBcs(U, flags, BC_V)
 
+        if batch_dict['Test_case'] == 'Step':
+            print("Step")
+            BC_V = batch_dict['Step']
+            U = fluid.setWallStepBcs(U, flags, BC_V)
+
             
         U = batch_dict['U']
 
@@ -557,6 +611,7 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             density_temp = density.clone()
         U = fluid.setWallBcs(U, flags)
         setConstVals(batch_dict, p, U, flags, density)
+
         U = batch_dict['U']
         if 'periodic-x' in mconf and 'periodic-y' in mconf:
             if mconf['periodic-x']:
@@ -595,13 +650,53 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
 
     if ( Outside_Ja == True):
 
-        if abs(div_after).max() > Threshold:
+        #if abs(div_after).max() > Threshold:
      
-            print( " Treshold surpassed ==========================================================> ")
+        #    print( " Treshold surpassed ==========================================================> ")
             
-            #Jacobi_switch[it]=1
-            Counter = 0
 
+
+        #    Jacobi_switch[it]+=1
+
+        #    div = fluid.velocityDivergence(U, flags)
+        #    is3D = (U.size(2) > 1)
+        #    pTol = mconf['pTol']
+        #    maxIter = mconf['jacobiIter']
+
+            #A_val = batch_dict['Val']
+            #I_A = batch_dict['IA']
+            #J_A = batch_dict['JA']
+
+        #    start_event = torch.cuda.Event(enable_timing=True)
+        #    end_event = torch.cuda.Event(enable_timing=True)
+        #    start_event.record()
+
+        #    residual = fluid.solveLinearSystemCG(flags, p, div, \
+        #        A_val, I_A, J_A,is_3d=is3D, p_tol=pTol, \
+        #        max_iter=maxIter)
+
+        #    end_event.record()
+        #    torch.cuda.synchronize()  # Wait for the events to be recorded! 
+        #    elapsed_time_ms = start_event.elapsed_time(end_event) 
+
+
+        #    fluid.velocityUpdate(pressure=p, U=U, flags=flags)
+
+        #    U = fluid.setWallBcs(U, flags)
+        #    setConstVals(batch_dict, p, U, flags, density)
+
+        #    U = batch_dict['U']
+
+        #    div_after  = fluid.velocityDivergence(U, flags)
+
+        print( " Treshold surpassed ==========================================================> ")
+
+        Jacobi_switch[it]=1
+        Counter = 0
+   
+        while abs(div_after).max() > Threshold and Counter< 10000 and it>18500:
+
+            print( " Treshold surpassed ==========================================================> ")
             Jacobi_switch[it]+=1
 
             div = fluid.velocityDivergence(U, flags)
@@ -609,46 +704,20 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             pTol = mconf['pTol']
             maxIter = mconf['jacobiIter']
 
-            A_val = batch_dict['Val']
-            I_A = batch_dict['IA']
-            J_A = batch_dict['JA']
 
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            start_event.record()
+            Jacobi_switch[it]+=1
 
-            residual = fluid.solveLinearSystemCG(flags, p, div, \
-                A_val, I_A, J_A,is_3d=is3D, p_tol=pTol, \
+            div = fluid.velocityDivergence(U, flags)
+                #print("Beginning ",(abs(div).max()).item())
+            is3D = (U.size(2) > 1)
+            pTol = mconf['pTol']
+            maxIter = 1
+
+            p, residual = fluid.solveLinearSystemJacobi( \
+                flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
                 max_iter=maxIter)
 
-            end_event.record()
-            torch.cuda.synchronize()  # Wait for the events to be recorded! 
-            elapsed_time_ms = start_event.elapsed_time(end_event) 
-
-
             fluid.velocityUpdate(pressure=p, U=U, flags=flags)
-
-            U = fluid.setWallBcs(U, flags)
-            setConstVals(batch_dict, p, U, flags, density)
-            U = batch_dict['U']
-
-            div_after  = fluid.velocityDivergence(U, flags)
-            
-            #while abs(div_after).max() > Threshold and Counter< 10000:
-
-            #    Jacobi_switch[it]+=1
-
-            #    div = fluid.velocityDivergence(U, flags)
-                #print("Beginning ",(abs(div).max()).item())
-            #    is3D = (U.size(2) > 1)
-            #    pTol = mconf['pTol']
-            #    maxIter = 1
-
-            #    p, residual = fluid.solveLinearSystemJacobi( \
-            #            flags=flags, div=div, is_3d=is3D, p_tol=pTol, \
-            #            max_iter=maxIter)
-
-            #    fluid.velocityUpdate(pressure=p, U=U, flags=flags)
 
             #    if 'periodic-x' in mconf and 'periodic-y' in mconf:
             #        U_temp = U.clone()
@@ -666,14 +735,14 @@ def simulate(mconf, batch_dict, net, sim_method, Time_vec, Time_Pres,Jacobi_swit
             #    if stick:
             #        fluid.setWallBcsStick(U, flags, flags_stick)   
 
-            #    U = fluid.setWallBcs(U, flags)
-            #    setConstVals(batch_dict, p, U, flags, density)
-            #    U = batch_dict['U']
+            U = fluid.setWallBcs(U, flags)
+            setConstVals(batch_dict, p, U, flags, density)
+            U = batch_dict['U']
 
-            #    Counter +=1
-            #    div_after  = fluid.velocityDivergence(U, flags)
-                #print("Ending ",(abs(div_after).max()).item())
-
+            Counter +=1
+            div_after  = fluid.velocityDivergence(U, flags)
+        
+        print("Ending Divergence level: ",(abs(div_after).max()).item(), " . Number of Jacobi its needed:  {} ".format(Jacobi_switch[it])) 
                  
 
     end_Pres = default_timer()
