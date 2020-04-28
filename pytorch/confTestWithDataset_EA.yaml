@@ -27,7 +27,7 @@ shuffleTraining: true
 #   OUTPUT
 #=========================================
 # modelDir : Output folder for trained model and loss log.
-modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_EA_1" 
+modelDir: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/ModelTest_Debug" 
 # modelFilename : Trained model name
 modelFilename: "convModel"  
 

@@ -18,7 +18,7 @@ realTimePlot: false
 # use Paraview to load those files.
 saveVTK: false
 # outputFolder : folder for storing results, checkpoints and config filesoutputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_plume_Debug/VK_BC_NN_Re_500"
-outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_VK/Phiflow_comparison/Re1000/CG_Big/1200_2400"
+outputFolder: "/scratch/daep/e.ajuria/FluidNet/Fluid_EA/fluidnet_cxx/results_VK/Phiflow_comparison/Re1000/CG_5e2_10000/1200_2400"
 # simMethod: choose convnet or jacobi or PCG
 simMethod: "CG"
 # modelDir : location of trained model

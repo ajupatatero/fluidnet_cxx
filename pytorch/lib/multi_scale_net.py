@@ -136,7 +136,9 @@ class MultiScaleNet(nn.Module):
         convN_1out = self.convN_1( torch.cat((F.interpolate(x,(x.size()[2:]),mode = 'bilinear',align_corners=align),
                                          F.interpolate(convN_2out,(x.size()[2:]),mode = 'bilinear',align_corners=align)),dim = 1) )
         #final_out = self.final(convN_1out)
-        final_out = torch.cat((self.final(convN_1out),F.interpolate(convN_2out,(x.size()[2:]),mode = 'bilinear',align_corners=align),
-                                        F.interpolate(F.interpolate(convN_4out,(half_size),mode = 'bilinear',align_corners=align),(x.size()[2:]),mode = 'bilinear',align_corners=align)),dim=1)
+        final_out = torch.cat((self.final(convN_1out),\
+                F.interpolate(convN_2out,(x.size()[2:]),mode = 'bilinear',align_corners=align),\
+                F.interpolate(F.interpolate(convN_4out,(half_size),mode = 'bilinear',align_corners=align),\
+                (x.size()[2:]),mode = 'bilinear',align_corners=align)),dim=1)
 
         return final_out

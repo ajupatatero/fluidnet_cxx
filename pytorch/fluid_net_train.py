@@ -176,16 +176,16 @@ try:
 
     # Create model and print layers and params
     if not resume:
-        net = lib.FluidNet(mconf)
+        net = lib.FluidNet(mconf, 0, conf['modelDir'])
     else:
-        net = model_saved.FluidNet(mconf)
+        net = model_saved.FluidNet(mconf, 0, path)
 
     if torch.cuda.is_available():
         net = net.cuda()
 
     # Initialize network weights with Kaiming normal method (a.k.a MSRA)
     net.apply(init_weights)
-    lib.summary(net, (5,1,128,128))
+    #lib.summary(net, (5,1,128,128))
 
     if resume:
         net.load_state_dict(state['state_dict'])
@@ -269,7 +269,9 @@ try:
 
             # Run the model forward
             flags = data[:,3].unsqueeze(1).contiguous()
-            out_p, out_U = net(data)
+
+            # New inputs for modle analysis
+            out_p, out_U, time = net(data, epoch, path)
 
             # Calculate targets
             target_p = target[:,0].unsqueeze(1)
@@ -349,6 +351,34 @@ try:
                 batch_dict['p'] = out_p
                 batch_dict['U'] = out_U
                 batch_dict['flags'] = flags
+                
+                resY = out_U.size(3)
+                resX = out_U.size(4)
+
+                # Some extra features for the batch_dict
+                batch_dict['Ustar'] = torch.zeros_like(out_U)
+                batch_dict['Div_in']= torch.zeros_like(out_p)
+                batch_dict['Test_case']= 'Train'
+
+               #it = 0
+
+                dt = base_dt
+                Outside_Ja = False
+                Threshold_Div = 0.0 
+
+                max_iter = max_epochs
+                method = 'convnet'
+                it = 0
+                folder = path
+
+                #Time Vec Declaration
+                Time_vec = np.zeros(max_iter)
+                Time_Pres = np.zeros(max_iter)
+                Jacobi_switch = np.zeros(max_iter)
+                Max_Div = np.zeros(max_iter)
+                Max_Div_All = np.zeros(max_iter)
+                time_big = np.zeros(max_iter)
+
 
                 # Set the simulation forward n steps (using model, no grad calculation),
                 # but on the last do not perform a pressure projection.
@@ -356,8 +386,10 @@ try:
                 with torch.no_grad():
                     for i in range(0, num_future_steps):
                         output_div = (i == num_future_steps)
-                        lib.simulate(mconf, batch_dict, net, \
-                                'convnet', epoch, output_div=output_div)
+                        lib.simulate(mconf, batch_dict, net, method, Time_vec, Time_Pres ,Jacobi_switch, \
+                                        Max_Div, Max_Div_All, folder, it,Threshold_Div, dt,Outside_Ja)
+                        #lib.simulate(mconf, batch_dict, net, \
+                        #        'convnet', epoch, output_div=output_div)
 
                 data_lt = torch.zeros_like(data)
                 data_lt[:,0] = batch_dict['p'].squeeze(1)
@@ -367,7 +399,7 @@ try:
 
                 mconf['dt'] = base_dt
 
-                out_p_LT, out_U_LT = net(data_lt)
+                out_p_LT, out_U_LT, time  = net(data_lt, epoch, path)
                 out_div_LT = fluid.velocityDivergence(out_U_LT.contiguous(), flags)
                 target_div_LT = torch.zeros_like(out_div)
                 divLTLoss = divLTLambda *_divLTLoss(out_div_LT, target_div_LT)

@@ -191,8 +191,9 @@ def velocityUpdate(pressure, U, flags):
     assert U.size(0) == b and U.size(2) == d and U.size(3) == h \
         and U.size(4) == w, "size mismatch"
     assert pressure.is_same_size(flags), "size mismatch"
-    assert U.is_contiguous() and flags.is_contiguous() and \
-              pressure.is_contiguous(), "Input is not contiguous"
+    assert U.is_contiguous(), "U is not contiguous"
+    assert flags.is_contiguous(), "Flags is not contiguous"
+    assert pressure.is_contiguous(), "Pressure is not contiguous"
 
 
     # First, we build the mask for detecting fluid cells. Borders are left untouched.

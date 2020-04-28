@@ -43,7 +43,7 @@ class FluidNet(nn.Module):
     # For now, only 2D model. Add 2D/3D option. Only known from data!
     # Also, build model with MSE of pressure as loss func, therefore input is velocity
     # and output is pressure, to be compared to target pressure.
-    def __init__(self, mconf, dropout=True):
+    def __init__(self, mconf, it, folder, dropout=True):
         super(FluidNet, self).__init__()
 
         
@@ -51,6 +51,8 @@ class FluidNet(nn.Module):
         self.mconf = mconf
         self.inDims = mconf['inputDim']
         self.is3D = mconf['is3D']
+        self.it = it
+        self.folder =folder
 
         self.scale = _ScaleNet(self.mconf)
         # Input channels = 3 (inDims, flags)
@@ -74,7 +76,7 @@ class FluidNet(nn.Module):
         # MultiScaleNet
         self.multiScale = MultiScaleNet(self.inDims)
 
-    def forward(self, input_):
+    def forward(self, input_, it,folder):
 
         # data indexes     |           |
         #       (dim 1)    |    2D     |    3D
@@ -173,7 +175,26 @@ class FluidNet(nn.Module):
             x = torch.squeeze(x,2)
 
         if self.mconf['model'] == 'ScaleNet':
-            p = self.multiScale(x)
+
+            # Declare variables
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+
+            # Start recording
+            start_event.record()
+
+            print("is X contiguous ", x.is_contiguous())
+            # Network it
+            p_out = self.multiScale(x)
+            
+            # Finish recording
+            end_event.record()
+            torch.cuda.synchronize()  # Wait for the events to be recorded! 
+            elapsed_time_ms = start_event.elapsed_time(end_event)
+            time = elapsed_time_ms
+
+            p= p_out[:,0,...].unsqueeze(1).contiguous()
+            print("is p contiguous ", p.is_contiguous())
 
         else:
             # Inital layers
@@ -209,16 +230,16 @@ class FluidNet(nn.Module):
             # Output pressure (1 chan)
             p = self.convOut(x)
 
-        print("P shape model line 212", p.shape)
-
         # Add back the unary dimension
         if not self.is3D:
             p = torch.unsqueeze(p, 2)
 
         # Correct U = UDiv - grad(p)
         # flags is the one with Manta's values, not occupancy in [0,1]
-        
-        print("Why not?, model line 220")  
+
+        print("IS P contiguous  model line 212", p.is_contiguous())
+        print("P shape model line 213", p.shape)
+
         fluid.velocityUpdate(pressure=p, U=UDiv, flags=flags)
 
         # We now UNDO the scale factor we applied on the input.
@@ -229,7 +250,7 @@ class FluidNet(nn.Module):
         # Set BCs after velocity update.
         UDiv = fluid.setWallBcs(UDiv, flags)
 
-       
-        return p, UDiv
+
+        return p, UDiv, time
 
 

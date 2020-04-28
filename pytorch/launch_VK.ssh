@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=VKP_CG
-#SBATCH --output=./logs/VK_1000_Phi_CG_big.txt
+#SBATCH --job-name=VK100_CG
+#SBATCH --output=./logs/VK_1000_Phi_CG_10000_5e2.txt
 #SBATCH --nodes=1
 #SBATCH --ntasks=12
 #SBATCH --cpus-per-task=1
